@@ -1,0 +1,6 @@
+node_modules
+.env
+audio_cache
+tts_cache.db
+dist
+*.db

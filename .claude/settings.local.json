@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Read(//tmp/old-flashcards/azure-data-engineering-flashcards/src/**)",
+      "Read(//private/tmp/old-flashcards/azure-data-engineering-flashcards/src/**)",
+      "Bash(npx tsc:*)"
+    ],
+    "additionalDirectories": [
+      "/Users/kanalaharshareddy/Library/CloudStorage/OneDrive-Personal/Applications/azure-data-engineering-flashcards/audio_cache"
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "Azure Data Engineering Flashcards",
+  "description": "Master Azure Data Engineering terms with interactive flashcards and quizzes.",
+  "requestFramePermissions": ["microphone"]
+}
