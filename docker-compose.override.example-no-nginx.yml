@@ -1,0 +1,8 @@
+# Example: use when the server already has Nginx on 80/443 and you want it to proxy to this app.
+# Copy to docker-compose.override.yml and run: docker compose up -d postgres app
+# (do not start nginx). Then configure your existing Nginx to proxy to http://127.0.0.1:3000
+
+services:
+  app:
+    ports:
+      - "127.0.0.1:3000:3000"

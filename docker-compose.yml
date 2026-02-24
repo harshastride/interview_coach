@@ -22,8 +22,8 @@ services:
       context: .
       args:
         GEMINI_API_KEY: ${GEMINI_API_KEY}
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     environment:
       - NODE_ENV=production
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -37,5 +37,33 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    volumes:
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  # One-off / cron: certbot certonly or renew (use scripts/certbot-init.sh or certbot-renew.sh)
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    entrypoint: []
+    profiles:
+      - certbot
+
 volumes:
   pg_data:
+  letsencrypt:
+  certbot_webroot:
