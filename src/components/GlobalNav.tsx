@@ -1,6 +1,7 @@
 import React from 'react';
 import { Home, ChevronLeft, BookOpen, MessageSquare, BrainCircuit } from 'lucide-react';
 import { cn } from '../lib/utils';
+import Logo from './Logo';
 
 export type SectionId = 'home' | 'flashcards' | 'interview' | 'quiz';
 
@@ -10,43 +11,58 @@ export interface GlobalTopBarProps {
   showBack: boolean;
   onBack: () => void;
   onHome: () => void;
-  /** Optional right-side content (e.g. admin gear + user avatar). */
   rightSlot?: React.ReactNode;
 }
 
 export function GlobalTopBar({ sectionLabel, stepLabel, showBack, onBack, onHome, rightSlot }: GlobalTopBarProps) {
+  const hasStep = stepLabel && stepLabel !== sectionLabel && stepLabel !== '';
   return (
-    <header className="flex-shrink-0 w-full bg-[var(--stint-bg-elevated)]/95 backdrop-blur-sm border-b border-[var(--stint-border)] sticky top-0 z-20">
-      <div className="max-w-2xl mx-auto px-4 h-12 md:h-14 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-1 min-w-0">
-          <button
-            type="button"
-            onClick={onHome}
-            className="flex items-center flex-shrink-0 rounded-lg py-2 pr-2 -ml-1 text-[var(--stint-primary)] hover:bg-[var(--stint-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--stint-primary)] focus:ring-offset-2 transition-colors"
-            aria-label="Go to Home"
-          >
-            <img src="/stint-logo.svg" alt="Stint Academy" className="h-6 md:h-7 w-auto" />
-            <span className="ml-0.5 relative -top-px text-[15px] md:text-[17px] font-semibold leading-none tracking-tight text-[var(--stint-primary)]">
-              Academy
-            </span>
-          </button>
+    <header className="flex-shrink-0 w-full bg-[var(--stint-bg-elevated)] border-b border-[var(--stint-border)] sticky top-0 z-20">
+      <div className="px-4 md:px-6 h-14 flex items-center gap-3">
+        {/* Mobile: Logo */}
+        <div className="md:hidden shrink-0">
+          <Logo size="sm" onClick={onHome} />
+        </div>
+
+        {/* Desktop: Page title area */}
+        <div className="hidden md:flex items-center gap-3 min-w-0">
           {showBack && (
             <button
               type="button"
               onClick={onBack}
-              className="flex-shrink-0 p-2 rounded-lg text-[var(--stint-text-muted)] hover:bg-[var(--stint-bg)] hover:text-[var(--stint-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--stint-primary)] focus:ring-offset-2 transition-colors"
+              className="shrink-0 w-8 h-8 rounded-xl border border-[var(--stint-border)] flex items-center justify-center text-[var(--stint-text-muted)] hover:bg-[var(--stint-bg)] hover:text-[var(--stint-text)] hover:border-[var(--stint-primary)]/30 transition-all"
               aria-label="Back"
             >
-              <ChevronLeft size={20} strokeWidth={2} />
+              <ChevronLeft size={16} strokeWidth={2} />
             </button>
           )}
+          {sectionLabel !== 'Home' && (
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="text-[15px] font-semibold text-[var(--stint-text)] tracking-tight">{sectionLabel}</h1>
+              {hasStep && (
+                <>
+                  <span className="text-[var(--stint-border)] text-xs">/</span>
+                  <span className="text-[13px] text-[var(--stint-text-muted)] truncate">{stepLabel}</span>
+                </>
+              )}
+            </div>
+          )}
         </div>
-        <div className="flex-1 min-w-0 flex justify-center">
-          <span className="text-[13px] md:text-sm font-semibold text-[var(--stint-text)] truncate tracking-tight">
-            {stepLabel ?? sectionLabel}
-          </span>
+
+        {/* Mobile: back + center label */}
+        {showBack && (
+          <button type="button" onClick={onBack} className="shrink-0 md:hidden text-[var(--stint-text-muted)]" aria-label="Back">
+            <ChevronLeft size={20} strokeWidth={2} />
+          </button>
+        )}
+        <div className="flex-1 min-w-0 flex justify-center md:hidden">
+          <span className="text-[13px] font-semibold text-[var(--stint-text)] truncate">{stepLabel || sectionLabel}</span>
         </div>
-        <div className="w-10 flex-shrink-0 flex items-center justify-end min-w-[2.5rem]">
+
+        <div className="hidden md:block flex-1" />
+
+        {/* Mobile: right slot */}
+        <div className="shrink-0 flex items-center gap-2 md:hidden">
           {rightSlot ?? <span aria-hidden />}
         </div>
       </div>
@@ -64,7 +80,7 @@ export interface GlobalBottomNavProps {
 
 const navItemClass = (active: boolean) =>
   cn(
-    'flex flex-col items-center justify-center gap-0.5 py-2 px-3 min-w-0 flex-1 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--stint-primary)] focus:ring-inset',
+    'flex flex-col items-center justify-center gap-0.5 py-2.5 px-4 min-w-0 flex-1 rounded-xl transition-all active:scale-95',
     active
       ? 'text-[var(--stint-primary)] bg-[var(--stint-primary)]/10 font-semibold'
       : 'text-[var(--stint-text-muted)] hover:bg-[var(--stint-bg)] hover:text-[var(--stint-primary)]'
@@ -76,22 +92,26 @@ export function GlobalBottomNav({ activeSection, onHome, onFlashcards, onIntervi
       className="flex-shrink-0 w-full bg-[var(--stint-bg-elevated)] border-t border-[var(--stint-border)] safe-area-pb md:hidden"
       aria-label="Main navigation"
     >
-      <div className="max-w-2xl mx-auto px-2 py-3 flex items-stretch gap-2">
+      <div className="max-w-md mx-auto px-2 py-2 flex items-stretch gap-1">
         <button type="button" onClick={onHome} className={navItemClass(activeSection === 'home')} aria-current={activeSection === 'home' ? 'page' : undefined}>
-          <Home size={22} strokeWidth={2} />
-          <span className="text-[10px] font-medium">Home</span>
+          {activeSection === 'home' && <div className="w-1 h-1 rounded-full bg-[var(--stint-primary)] mb-0.5" />}
+          <Home size={24} strokeWidth={1.8} />
+          <span className="text-[11px] font-medium">Home</span>
         </button>
         <button type="button" onClick={onFlashcards} className={navItemClass(activeSection === 'flashcards')} aria-current={activeSection === 'flashcards' ? 'page' : undefined}>
-          <BookOpen size={22} strokeWidth={2} />
-          <span className="text-[10px] font-medium">Flashcards</span>
+          {activeSection === 'flashcards' && <div className="w-1 h-1 rounded-full bg-[var(--stint-primary)] mb-0.5" />}
+          <BookOpen size={24} strokeWidth={1.8} />
+          <span className="text-[11px] font-medium">Flashcards</span>
         </button>
         <button type="button" onClick={onInterview} className={navItemClass(activeSection === 'interview')} aria-current={activeSection === 'interview' ? 'page' : undefined}>
-          <MessageSquare size={22} strokeWidth={2} />
-          <span className="text-[10px] font-medium">Interview</span>
+          {activeSection === 'interview' && <div className="w-1 h-1 rounded-full bg-[var(--stint-primary)] mb-0.5" />}
+          <MessageSquare size={24} strokeWidth={1.8} />
+          <span className="text-[11px] font-medium">Interview</span>
         </button>
         <button type="button" onClick={onQuiz} className={navItemClass(activeSection === 'quiz')} aria-current={activeSection === 'quiz' ? 'page' : undefined}>
-          <BrainCircuit size={22} strokeWidth={2} />
-          <span className="text-[10px] font-medium">Quiz</span>
+          {activeSection === 'quiz' && <div className="w-1 h-1 rounded-full bg-[var(--stint-primary)] mb-0.5" />}
+          <BrainCircuit size={24} strokeWidth={1.8} />
+          <span className="text-[11px] font-medium">Quiz</span>
         </button>
       </div>
     </nav>
@@ -106,7 +126,7 @@ export interface AppLayoutProps {
 
 export function AppLayout({ children, topBar, bottomNav }: AppLayoutProps) {
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[var(--stint-bg)] text-[var(--stint-text)] font-sans">
+    <div className="h-screen flex flex-col overflow-hidden bg-[var(--stint-bg)] text-[var(--stint-text)] font-sans md:ml-60">
       <GlobalTopBar {...topBar} />
       <main className="flex-1 min-h-0 overflow-auto flex flex-col pb-20 md:pb-0">
         {children}

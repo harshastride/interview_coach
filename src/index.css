@@ -1,10 +1,26 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Playfair+Display:wght@600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
 /* Single-page layout: no body scroll */
 html, body, #root {
   height: 100%;
   overflow: hidden;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv01", "cv02", "cv03", "cv04", "cv11";
+  font-optical-sizing: auto;
+  letter-spacing: -0.011em;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ─── Layout ───────────────────────────────────────────────────── */
+:root {
+  --sidebar-width: 240px;
+  --sidebar-collapsed: 64px;
 }
 
 /* ─── Light theme ───────────────────────────────────────────────── */
@@ -21,6 +37,9 @@ html, body, #root {
   --stint-text-muted: #545D6E;
   --stint-shadow-card: 0 4px 24px -4px rgba(68, 116, 185, 0.10), 0 1px 3px rgba(0,0,0,0.06);
   --stint-shadow-card-hover: 0 8px 32px -4px rgba(68, 116, 185, 0.16), 0 2px 6px rgba(0,0,0,0.08);
+  --stint-success: #10B981;
+  --stint-warning: #F59E0B;
+  --stint-danger: #EF4444;
 }
 
 /* ─── Dark theme ────────────────────────────────────────────────── */
@@ -37,6 +56,9 @@ html, body, #root {
   --stint-text-muted: #94A3B8;
   --stint-shadow-card: 0 4px 24px -4px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);
   --stint-shadow-card-hover: 0 8px 32px -4px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
+  --stint-success: #34D399;
+  --stint-warning: #FBBF24;
+  --stint-danger: #FB7185;
 }
 
 .dark body,
@@ -46,8 +68,8 @@ html, body, #root {
 }
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Cormorant Garamond", serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
@@ -150,3 +172,14 @@ html, body, #root {
 .dark .text-amber-500 { color: #FBBF24; }
 .dark .text-amber-700 { color: #FCD34D; }
 .dark .text-amber-800 { color: #FDE68A; }
+
+/* ─── Micro-interactions ───────────────────────────────────────── */
+@keyframes flicker {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.08) rotate(-3deg); }
+  50% { transform: scale(1) rotate(1deg); }
+  75% { transform: scale(1.04) rotate(-1deg); }
+}
+.flame-animate {
+  animation: flicker 2s ease-in-out infinite;
+}

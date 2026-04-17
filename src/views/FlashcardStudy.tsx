@@ -869,7 +869,7 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
                             <Volume2 size={24} strokeWidth={2} />
                           </button>
                         </div>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-semibold text-[var(--stint-text)] leading-tight max-w-[85%]">
+                        <h2 className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold text-[var(--stint-text)] leading-tight max-w-[85%]">
                           {currentCard.term}
                         </h2>
                         <p className="mt-8 text-sm text-[var(--stint-text-muted)] flex items-center gap-2 opacity-70">

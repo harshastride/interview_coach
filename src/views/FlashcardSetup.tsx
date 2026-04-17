@@ -154,7 +154,7 @@ export default function FlashcardSetup({ uploadedTermsRaw, currentUser, onConten
     <>
       {showAdminPanel && <AdminPanel onClose={() => setShowAdminPanel(false)} currentUser={currentUser} onContentRefresh={onContentRefresh} />}
       <AppLayout topBar={topBar} bottomNav={bottomNavProps}>
-        <div className="w-full max-w-2xl mx-auto px-4 py-5 space-y-4">
+        <div className="w-full max-w-3xl mx-auto px-4 py-5 space-y-4">
 
           {/* ── Header area: search + quick actions ──────── */}
           <div className="space-y-3">
@@ -267,7 +267,7 @@ export default function FlashcardSetup({ uploadedTermsRaw, currentUser, onConten
                 </button>
 
                 {/* Individual topic cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pl-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 pl-2">
                   {filtered.map((cat) => {
                     const isSelected = selectedCategories.includes(cat);
                     const count = countsByCategory[cat] || 0;

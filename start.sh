@@ -42,6 +42,20 @@ if grep -Eq '^\s*DATABASE_URL=.*\[YOUR-PASSWORD\]' .env; then
   exit 1
 fi
 
-# ── 5. Start the dev server ─────────────────────────────
+# ── 5. Start Ollama if AI_PROVIDER=local ────────────────
+if grep -Eq '^AI_PROVIDER=local' .env 2>/dev/null; then
+  if command -v ollama &>/dev/null; then
+    if ! curl -sf http://localhost:11434/api/tags &>/dev/null; then
+      echo -e "${GREEN}Starting Ollama...${NC}"
+      ollama serve &>/dev/null &
+      sleep 2
+    fi
+    echo -e "${GREEN}Ollama is running ($(ollama list 2>/dev/null | tail -1 | awk '{print $1}'))${NC}"
+  else
+    echo -e "${YELLOW}Warning: AI_PROVIDER=local but Ollama is not installed. Install from https://ollama.com${NC}"
+  fi
+fi
+
+# ── 6. Start the dev server ─────────────────────────────
 echo -e "${GREEN}Starting dev server at http://localhost:3000 ...${NC}"
 npm run dev

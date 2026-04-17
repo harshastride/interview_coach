@@ -4,6 +4,8 @@ import { useAuth } from './hooks/useAuth';
 import { useDarkMode } from './hooks/useDarkMode';
 import { Loader2 } from 'lucide-react';
 import type { InterviewEntry } from './constants';
+import Sidebar from './components/Sidebar';
+import AdminPanel from './components/AdminPanel';
 
 // Lazy-loaded views for code splitting
 const HomeScreen = React.lazy(() => import('./views/HomeScreen'));
@@ -29,6 +31,7 @@ export default function App() {
   useDarkMode();
 
   // Uploaded content state (fetched when authenticated)
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [uploadedTermsRaw, setUploadedTermsRaw] = useState<{ t: string; d: string; l: number; c: string }[]>([]);
   const [uploadedInterviewRaw, setUploadedInterviewRaw] = useState<InterviewEntry[]>([]);
 
@@ -68,6 +71,24 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      {/* Sidebar + AdminPanel render outside Routes (they're not route elements) */}
+      {authStatus === 'authenticated' && (
+        <>
+          <Sidebar
+            currentUser={currentUser}
+            canUpload={currentUser?.role === 'admin' || currentUser?.role === 'manager'}
+            onLogout={handleLogout}
+            onOpenAdmin={() => setShowAdminPanel(true)}
+          />
+          {showAdminPanel && (
+            <AdminPanel
+              onClose={() => setShowAdminPanel(false)}
+              currentUser={currentUser}
+              onContentRefresh={refreshUploadedContent}
+            />
+          )}
+        </>
+      )}
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           {authStatus === 'unauthenticated' && (

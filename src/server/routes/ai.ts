@@ -417,4 +417,92 @@ router.post("/transcribe", requireAuth, async (req, res) => {
   }
 });
 
+// ── Text generation abstraction (Gemini or local Ollama) ─────────────────
+async function generateText(prompt: string): Promise<string> {
+  if (process.env.AI_PROVIDER === "local") {
+    const url = process.env.OLLAMA_URL || "http://localhost:11434";
+    const model = process.env.OLLAMA_MODEL || "gemma3:4b";
+    const res = await fetch(`${url}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model, prompt, stream: false }),
+    });
+    if (!res.ok) throw new Error(`Ollama error: ${res.status}`);
+    const data = await res.json();
+    return data.response || "";
+  }
+  // Default: Gemini
+  const ai = getGenAI();
+  if (!ai) throw new Error("GEMINI_API_KEY not configured");
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+  });
+  return response.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+// ── POST /evaluate-answer – Score how well the user read the answer aloud ──
+router.post("/evaluate-answer", requireAuth, async (req, res) => {
+  try {
+    const { question, userAnswer, idealAnswer, role, category } = req.body;
+    if (!question || !userAnswer || !idealAnswer) {
+      return res.status(400).json({ error: "question, userAnswer, and idealAnswer are required" });
+    }
+
+    const prompt = `You are a reading practice coach for technical interview preparation.
+
+The candidate was shown a written answer on screen and asked to READ IT ALOUD. Compare what they actually said to the original text.
+
+ORIGINAL TEXT (what was on screen): "${idealAnswer}"
+
+WHAT THE CANDIDATE SAID (captured via speech recognition): "${userAnswer}"
+
+Evaluate their reading quality:
+
+1. accuracy: How closely did their spoken words match the original text? Look at word-for-word accuracy — did they skip words, add words, or mispronounce technical terms?
+2. fluency: Did they read smoothly and confidently, or were there stumbles, hesitations, and restarts?
+3. completeness: Did they read the full answer or only part of it?
+
+Respond with JSON only (no markdown, no code fences):
+{
+  "overall_score": <number 0-100>,
+  "accuracy": <number 0-100>,
+  "fluency": <number 0-100>,
+  "completeness": <number 0-100>,
+  "missed_words": ["<important word or term they skipped or mispronounced>"],
+  "strengths": ["<what they did well>"],
+  "improvements": ["<specific tip to read better>"],
+  "coaching": "<one sentence of feedback>"
+}
+
+Be encouraging. The goal is to help them practice reading technical terminology fluently.`;
+
+    const raw = await generateText(prompt);
+    const cleaned = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+
+    try {
+      const parsed = JSON.parse(cleaned);
+      return res.json({
+        overall_score: Number(parsed.overall_score) || 0,
+        accuracy: Number(parsed.accuracy) || 0,
+        fluency: Number(parsed.fluency) || 0,
+        completeness: Number(parsed.completeness) || 0,
+        missed_words: Array.isArray(parsed.missed_words) ? parsed.missed_words.map(String) : [],
+        strengths: Array.isArray(parsed.strengths) ? parsed.strengths.map(String) : [],
+        improvements: Array.isArray(parsed.improvements) ? parsed.improvements.map(String) : [],
+        coaching: String(parsed.coaching || ""),
+      });
+    } catch {
+      return res.json({
+        overall_score: 0, accuracy: 0, fluency: 0, completeness: 0,
+        missed_words: [],
+        strengths: [], improvements: ["Could not parse evaluation result."], coaching: "",
+      });
+    }
+  } catch (e) {
+    console.error("AI evaluate-answer error:", e);
+    return res.status(500).json({ error: "Evaluation failed" });
+  }
+});
+
 export default router;

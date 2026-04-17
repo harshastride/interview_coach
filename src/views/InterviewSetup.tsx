@@ -80,7 +80,7 @@ export default function InterviewSetup({ uploadedInterviewRaw, currentUser, onCo
     <>
       {showAdminPanel && <AdminPanel onClose={() => setShowAdminPanel(false)} currentUser={currentUser} onContentRefresh={onContentRefresh} />}
       <AppLayout topBar={topBar} bottomNav={bottomNavProps}>
-        <div className="w-full max-w-2xl mx-auto px-4 py-6 space-y-6">
+        <div className="w-full max-w-3xl mx-auto px-4 py-6 space-y-6">
           <p className="text-xs text-[var(--stint-text-muted)]">Choose topics or Random. You'll get up to 10 questions per session.</p>
           <section>
             <h2 className="text-xs font-bold uppercase tracking-widest text-[var(--stint-primary)] mb-2">Random</h2>

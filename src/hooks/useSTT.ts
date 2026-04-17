@@ -5,181 +5,154 @@ const FETCH_HEADERS = {
   'Content-Type': 'application/json',
 };
 
+/* Browser SpeechRecognition types (not in all TS libs) */
+interface SpeechRecognitionResult {
+  readonly isFinal: boolean;
+  readonly length: number;
+  [index: number]: { readonly transcript: string; readonly confidence: number };
+}
+interface SpeechRecognitionResultList {
+  readonly length: number;
+  [index: number]: SpeechRecognitionResult;
+}
+interface SpeechRecognitionEvent extends Event {
+  readonly results: SpeechRecognitionResultList;
+  readonly resultIndex: number;
+}
+interface BrowserSpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+type SpeechRecognitionCtor = new () => BrowserSpeechRecognition;
+
+function getSpeechRecognition(): SpeechRecognitionCtor | null {
+  if (typeof window === 'undefined') return null;
+  return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null;
+}
+
+export interface EvaluationResult {
+  overall_score: number;
+  accuracy: number;
+  fluency: number;
+  completeness: number;
+  missed_words: string[];
+  strengths: string[];
+  improvements: string[];
+  coaching: string;
+}
+
 export function useSTT() {
   const [isListening, setIsListening] = useState(false);
-  const [transcription, setTranscription] = useState('');
-  const [similarityScore, setSimilarityScore] = useState<number | null>(null);
+  const [transcript, setTranscript] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
 
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
 
-  const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string;
-        // Strip the data URL prefix (e.g. "data:audio/webm;base64,")
-        const base64 = dataUrl.split(',')[1] || '';
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  };
+  const isSupported = !!getSpeechRecognition();
 
-  const sendAudioToServer = useCallback(async (contextTerm: string) => {
-    const chunks = audioChunksRef.current;
-    if (chunks.length === 0) {
-      setTranscription('No audio recorded.');
-      return;
-    }
-
-    const blob = new Blob(chunks, { type: chunks[0]?.type || 'audio/webm' });
-    audioChunksRef.current = [];
-
-    try {
-      const base64Audio = await blobToBase64(blob);
-      const mimeType = blob.type || 'audio/webm';
-
-      const response = await fetch('/api/ai/transcribe', {
-        method: 'POST',
-        credentials: 'include',
-        headers: FETCH_HEADERS,
-        body: JSON.stringify({
-          audio: base64Audio,
-          mimeType,
-          context: contextTerm,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Transcription failed: ${response.status}`);
-      }
-
-      const { text } = await response.json();
-      setTranscription(text || '');
-      return text || '';
-    } catch (error) {
-      console.error('Transcription Error:', error);
-      setTranscription('Error transcribing audio.');
-      return undefined;
-    }
+  const resetTranscript = useCallback(() => {
+    setTranscript('');
+    setInterimTranscript('');
   }, []);
 
-  const stopListening = useCallback(async (contextTerm?: string) => {
-    // Clear auto-stop timer
-    if (autoStopTimerRef.current) {
-      clearTimeout(autoStopTimerRef.current);
-      autoStopTimerRef.current = null;
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
     }
-
-    // Stop MediaRecorder
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
-    mediaRecorderRef.current = null;
-
-    // Stop media stream tracks
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-    }
-
     setIsListening(false);
+    setInterimTranscript('');
+  }, []);
 
-    // Send recorded audio to server if we have a context term
-    if (contextTerm) {
-      return sendAudioToServer(contextTerm);
+  const startListening = useCallback(() => {
+    const SpeechRecognitionClass = getSpeechRecognition();
+    if (!SpeechRecognitionClass) return;
+
+    // Stop any existing recognition
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
     }
-  }, [sendAudioToServer]);
 
-  const startListening = useCallback(async (contextTerm: string) => {
-    if (isListening) return;
-
+    resetTranscript();
     setIsListening(true);
-    setTranscription('Listening...');
-    setSimilarityScore(null);
-    audioChunksRef.current = [];
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
+    const recognition = new SpeechRecognitionClass();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
 
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
+    let finalText = '';
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalText += result[0].transcript + ' ';
+          setTranscript(finalText.trim());
+        } else {
+          interim += result[0].transcript;
         }
-      };
+      }
+      setInterimTranscript(interim);
+    };
 
-      mediaRecorder.onstop = async () => {
-        // When recording stops, send audio to the server
-        const text = await sendAudioToServer(contextTerm);
-        if (text) {
-          setTranscription(text);
-        }
-      };
-
-      mediaRecorder.start();
-
-      // Auto-stop after 5 seconds
-      autoStopTimerRef.current = setTimeout(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-          mediaRecorderRef.current.stop();
-        }
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-          mediaStreamRef.current = null;
-        }
-        setIsListening(false);
-      }, 5000);
-    } catch (error) {
-      console.error('Mic Error:', error);
+    recognition.onerror = (event: Event) => {
+      console.warn('SpeechRecognition error:', (event as any).error);
       setIsListening(false);
-      setTranscription('Error accessing microphone.');
-    }
-  }, [isListening, sendAudioToServer]);
+    };
 
-  const compareAnswer = useCallback(async (
-    userTranscription: string,
-    correctTerm: string,
-  ): Promise<{ score: number; feedback: string; isMatch: boolean } | null> => {
+    recognition.onend = () => {
+      setIsListening(false);
+      setInterimTranscript('');
+    };
+
+    recognition.start();
+    recognitionRef.current = recognition;
+  }, [resetTranscript]);
+
+  /** Call the AI evaluation endpoint to score reading quality */
+  const evaluateAnswer = useCallback(async (
+    question: string,
+    userAnswer: string,
+    idealAnswer: string,
+    role?: string,
+    category?: string,
+  ): Promise<EvaluationResult | null> => {
     try {
-      const response = await fetch('/api/ai/compare', {
+      const response = await fetch('/api/ai/evaluate-answer', {
         method: 'POST',
         credentials: 'include',
         headers: FETCH_HEADERS,
-        body: JSON.stringify({
-          transcription: userTranscription,
-          correctTerm,
-        }),
+        body: JSON.stringify({ question, userAnswer, idealAnswer, role, category }),
       });
 
       if (!response.ok) {
-        throw new Error(`Compare failed: ${response.status}`);
+        throw new Error(`Evaluation failed: ${response.status}`);
       }
 
-      const result = await response.json();
-      setSimilarityScore(result.score);
-      return result;
+      return await response.json();
     } catch (error) {
-      console.error('Comparison Error:', error);
+      console.error('Evaluation Error:', error);
       return null;
     }
   }, []);
 
   return {
     isListening,
-    transcription,
-    similarityScore,
+    transcript,
+    interimTranscript,
+    isSupported,
     startListening,
     stopListening,
-    compareAnswer,
-    setTranscription,
-    setSimilarityScore,
+    resetTranscript,
+    evaluateAnswer,
   };
 }
