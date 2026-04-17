@@ -105,7 +105,7 @@ nano .env
 5. Set production values in `.env`:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- `SESSION_SECRET`
+- `SESSION_SECRET` — generate a random value (e.g. on the server: `openssl rand -hex 32`, or on your laptop: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`). Paste the output as the value; keep it secret.
 - `GEMINI_API_KEY`
 - `APP_URL=https://<your-domain>`
 - `DOMAIN=<your-domain>` (e.g. `app.example.com`) — used by Nginx and Certbot

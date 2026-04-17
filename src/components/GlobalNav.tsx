@@ -16,7 +16,7 @@ export interface GlobalTopBarProps {
 
 export function GlobalTopBar({ sectionLabel, stepLabel, showBack, onBack, onHome, rightSlot }: GlobalTopBarProps) {
   return (
-    <header className="flex-shrink-0 w-full bg-white/95 backdrop-blur-sm border-b border-[var(--stint-border)] sticky top-0 z-20">
+    <header className="flex-shrink-0 w-full bg-[var(--stint-bg-elevated)]/95 backdrop-blur-sm border-b border-[var(--stint-border)] sticky top-0 z-20">
       <div className="max-w-2xl mx-auto px-4 h-12 md:h-14 flex items-center justify-between gap-3">
         <div className="flex items-center gap-1 min-w-0">
           <button
@@ -67,13 +67,13 @@ const navItemClass = (active: boolean) =>
     'flex flex-col items-center justify-center gap-0.5 py-2 px-3 min-w-0 flex-1 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--stint-primary)] focus:ring-inset',
     active
       ? 'text-[var(--stint-primary)] bg-[var(--stint-primary)]/10 font-semibold'
-      : 'text-[var(--stint-text-muted)] hover:bg-black/5 hover:text-[var(--stint-primary)]'
+      : 'text-[var(--stint-text-muted)] hover:bg-[var(--stint-bg)] hover:text-[var(--stint-primary)]'
   );
 
 export function GlobalBottomNav({ activeSection, onHome, onFlashcards, onInterview, onQuiz }: GlobalBottomNavProps) {
   return (
     <nav
-      className="flex-shrink-0 w-full bg-white border-t border-[var(--stint-primary)]/10 safe-area-pb md:hidden"
+      className="flex-shrink-0 w-full bg-[var(--stint-bg-elevated)] border-t border-[var(--stint-border)] safe-area-pb md:hidden"
       aria-label="Main navigation"
     >
       <div className="max-w-2xl mx-auto px-2 py-3 flex items-stretch gap-2">
@@ -106,7 +106,7 @@ export interface AppLayoutProps {
 
 export function AppLayout({ children, topBar, bottomNav }: AppLayoutProps) {
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[var(--stint-bg)] text-[#1A1A1A] font-sans">
+    <div className="h-screen flex flex-col overflow-hidden bg-[var(--stint-bg)] text-[var(--stint-text)] font-sans">
       <GlobalTopBar {...topBar} />
       <main className="flex-1 min-h-0 overflow-auto flex flex-col pb-20 md:pb-0">
         {children}

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 
 /* Single-page layout: no body scroll */
@@ -7,16 +7,42 @@ html, body, #root {
   overflow: hidden;
 }
 
-/* Stint Academy theme palette — redesign plan Direction A */
+/* ─── Light theme ───────────────────────────────────────────────── */
 :root {
   --stint-primary: #4474B9;
   --stint-primary-dark: #0F6199;
   --stint-accent: #4E8ACE;
   --stint-light: #75C4F3;
   --stint-bg: #F2F7FC;
+  --stint-bg-elevated: #FFFFFF;
+  --stint-bg-card: #FFFFFF;
   --stint-border: #E5E7EB;
   --stint-text: #1A1A1A;
   --stint-text-muted: #545D6E;
+  --stint-shadow-card: 0 4px 24px -4px rgba(68, 116, 185, 0.10), 0 1px 3px rgba(0,0,0,0.06);
+  --stint-shadow-card-hover: 0 8px 32px -4px rgba(68, 116, 185, 0.16), 0 2px 6px rgba(0,0,0,0.08);
+}
+
+/* ─── Dark theme ────────────────────────────────────────────────── */
+.dark {
+  --stint-primary: #7EB4E8;
+  --stint-primary-dark: #5A9AD6;
+  --stint-accent: #8EC5F5;
+  --stint-light: #4474B9;
+  --stint-bg: #0F172A;
+  --stint-bg-elevated: #1E293B;
+  --stint-bg-card: #1E293B;
+  --stint-border: #334155;
+  --stint-text: #F1F5F9;
+  --stint-text-muted: #94A3B8;
+  --stint-shadow-card: 0 4px 24px -4px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);
+  --stint-shadow-card-hover: 0 8px 32px -4px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
+}
+
+.dark body,
+.dark #root {
+  background-color: var(--stint-bg);
+  color: var(--stint-text);
 }
 
 @theme {
@@ -30,9 +56,9 @@ html, body, #root {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
-/* 3D flashcard and markdown (from App study screen) */
+/* ─── 3D flashcard ──────────────────────────────────────────────── */
 .perspective-1000 {
-  perspective: 1000px;
+  perspective: 1200px;
 }
 .preserve-3d {
   transform-style: preserve-3d;
@@ -43,7 +69,84 @@ html, body, #root {
 .rotate-y-180 {
   transform: rotateY(180deg);
 }
+
+/* ─── Card surface — uses new CSS variables ─────────────────────── */
+.card-surface {
+  background: var(--stint-bg-card);
+  box-shadow: var(--stint-shadow-card);
+  border: 1px solid var(--stint-border);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.card-surface:hover {
+  box-shadow: var(--stint-shadow-card-hover);
+}
+
+/* ─── Icon button — ghost style that works in both themes ───────── */
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border-radius: 0.75rem;
+  color: var(--stint-text-muted);
+  transition: all 0.15s ease;
+}
+.icon-btn:hover {
+  background: var(--stint-primary);
+  background: color-mix(in srgb, var(--stint-primary) 12%, transparent);
+  color: var(--stint-primary);
+}
+.icon-btn.active {
+  background: color-mix(in srgb, var(--stint-primary) 15%, transparent);
+  color: var(--stint-primary);
+}
+
+/* ─── Markdown ──────────────────────────────────────────────────── */
 .markdown-body strong {
   font-weight: 700;
   color: var(--stint-primary);
 }
+
+/* ─── Dark mode overrides for Tailwind's hardcoded colors ───────── */
+.dark .bg-white { background-color: var(--stint-bg-elevated); }
+.dark .bg-emerald-50\/80 { background-color: rgb(6 78 59 / 0.2); }
+.dark .bg-emerald-50 { background-color: rgb(6 78 59 / 0.2); }
+.dark .bg-rose-50 { background-color: rgb(127 29 29 / 0.2); }
+.dark .bg-amber-50 { background-color: rgb(120 53 15 / 0.2); }
+.dark .bg-blue-50 { background-color: rgb(30 58 138 / 0.2); }
+.dark .bg-orange-50 { background-color: rgb(124 45 18 / 0.2); }
+.dark .border-black\/5,
+.dark .border-black\/10 { border-color: var(--stint-border); }
+.dark .text-black\/50,
+.dark .text-black\/60 { color: var(--stint-text-muted); }
+.dark .text-\[\#6B7280\] { color: var(--stint-text-muted); }
+.dark .text-\[\#1A1A1A\] { color: var(--stint-text); }
+.dark .text-\[\#1A1A1A\]\/70,
+.dark .text-\[\#1A1A1A\]\/60 { color: var(--stint-text-muted); }
+.dark .shadow-xl { box-shadow: var(--stint-shadow-card); }
+.dark .shadow-sm { box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+
+/* Dark mode for colored borders */
+.dark .border-emerald-200 { border-color: rgb(6 78 59 / 0.4); }
+.dark .border-emerald-400 { border-color: rgb(16 185 129 / 0.4); }
+.dark .border-emerald-100 { border-color: rgb(6 78 59 / 0.3); }
+.dark .border-rose-200 { border-color: rgb(127 29 29 / 0.4); }
+.dark .border-rose-400 { border-color: rgb(244 63 94 / 0.4); }
+.dark .border-rose-300 { border-color: rgb(244 63 94 / 0.3); }
+.dark .border-orange-200 { border-color: rgb(124 45 18 / 0.4); }
+.dark .border-blue-200 { border-color: rgb(30 58 138 / 0.4); }
+.dark .border-amber-200 { border-color: rgb(120 53 15 / 0.4); }
+.dark .border-amber-300 { border-color: rgb(120 53 15 / 0.5); }
+
+/* Dark text overrides for status colors */
+.dark .text-emerald-600 { color: #34D399; }
+.dark .text-emerald-700 { color: #34D399; }
+.dark .text-emerald-800 { color: #A7F3D0; }
+.dark .text-emerald-900 { color: #D1FAE5; }
+.dark .text-rose-500 { color: #FB7185; }
+.dark .text-rose-600 { color: #FB7185; }
+.dark .text-rose-700 { color: #FDA4AF; }
+.dark .text-orange-600 { color: #FB923C; }
+.dark .text-amber-500 { color: #FBBF24; }
+.dark .text-amber-700 { color: #FCD34D; }
+.dark .text-amber-800 { color: #FDE68A; }

@@ -1,0 +1,5 @@
+# Local-dev overrides — expose Postgres on port 5433 to avoid conflict with local Postgres
+services:
+  postgres:
+    ports:
+      - "5433:5432"

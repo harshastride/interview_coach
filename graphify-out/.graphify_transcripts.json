@@ -1,0 +1,12 @@
+  warning: could not transcribe audio_cache/azure-virtual-machine.wav: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+  warning: could not transcribe audio_cache/txt.wav: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+  warning: could not transcribe audio_cache/variable.wav: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+  warning: could not transcribe audio_cache/inner-join.wav: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+  warning: could not transcribe audio_cache/resource-group.wav: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+  warning: could not transcribe audio_cache/server.wav: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+  warning: could not transcribe audio_cache/data-lake.wav: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+  warning: could not transcribe audio_cache/azure-active-directory--aad-.wav: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+  warning: could not transcribe audio_cache/oltp--online-transaction-processing-.wav: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+  warning: could not transcribe audio_cache/foreign-key.wav: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+  warning: could not transcribe audio_cache/kafka-topic.wav: Video transcription requires faster-whisper. Run: pip install 'graphifyy[video]'
+[]
