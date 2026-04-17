@@ -1,6 +1,10 @@
 import { pgPool } from "./pool.ts";
 
 export async function initPg() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is required and should point to your Supabase Postgres instance.");
+  }
+
   const client = await pgPool.connect();
   try {
     await client.query(`

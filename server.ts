@@ -34,7 +34,7 @@ async function startServer() {
   }
 
   await initPg().catch((err) => {
-    console.error("Failed to init PostgreSQL:", err);
+    console.error("Failed to init database:", err);
     process.exit(1);
   });
 

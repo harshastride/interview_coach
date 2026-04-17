@@ -1,7 +1,9 @@
 import pg from "pg";
 
+const connectionString = process.env.DATABASE_URL;
+const useSupabaseSsl = connectionString?.includes(".supabase.co") === true;
+
 export const pgPool = new pg.Pool({
-  connectionString:
-    process.env.DATABASE_URL ||
-    "postgresql://flashcards:flashcards@localhost:5432/flashcards",
+  connectionString,
+  ssl: useSupabaseSsl ? { rejectUnauthorized: false } : undefined,
 });

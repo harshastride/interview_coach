@@ -12,7 +12,7 @@ NC='\033[0m'
 echo -e "${GREEN}=== Interview Coach — Startup ===${NC}"
 
 # ── 1. Check prerequisites ──────────────────────────────
-for cmd in node npm docker; do
+for cmd in node npm; do
   if ! command -v "$cmd" &>/dev/null; then
     echo -e "${RED}Error: '$cmd' is not installed.${NC}"
     exit 1
@@ -31,19 +31,17 @@ fi
 echo -e "${GREEN}Installing npm dependencies...${NC}"
 npm install
 
-# ── 4. Start PostgreSQL via Docker Compose ───────────────
-# docker-compose.override.yml exposes port 5432 to the host for local dev
-echo -e "${GREEN}Starting PostgreSQL...${NC}"
-docker compose up -d postgres
-echo "Waiting for PostgreSQL to be healthy..."
-until docker compose exec postgres pg_isready -U flashcards -d flashcards &>/dev/null; do
-  sleep 1
-done
-echo -e "${GREEN}PostgreSQL is ready.${NC}"
+# ── 4. Ensure DATABASE_URL is configured ────────────────
+if ! grep -Eq '^DATABASE_URL=' .env; then
+  echo -e "${RED}Error: DATABASE_URL is missing in .env.${NC}"
+  exit 1
+fi
 
-# ── 5. Export DATABASE_URL for local dev (port 5433 to avoid conflict with local PG) ──
-export DATABASE_URL="postgresql://flashcards:flashcards@localhost:5433/flashcards"
+if grep -Eq '^\s*DATABASE_URL=.*\[YOUR-PASSWORD\]' .env; then
+  echo -e "${RED}Error: Replace [YOUR-PASSWORD] in DATABASE_URL before starting the app.${NC}"
+  exit 1
+fi
 
-# ── 6. Start the dev server ─────────────────────────────
+# ── 5. Start the dev server ─────────────────────────────
 echo -e "${GREEN}Starting dev server at http://localhost:3000 ...${NC}"
 npm run dev
