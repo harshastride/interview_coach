@@ -35,8 +35,5 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # SSL is now handled by the host-level nginx reverse proxy.
-  # Certbot runs directly on the host (see /etc/nginx/sites-available/multi-app).
-
 volumes:
   pg_data:
