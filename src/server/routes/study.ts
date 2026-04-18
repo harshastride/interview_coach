@@ -4,9 +4,10 @@ import { requireAuth, type DbUser } from "../middleware/auth.ts";
 
 const router = express.Router();
 
-// ── GET /api/study/due-cards — Get cards due for spaced repetition review ──
+// ── GET /api/study/due-cards ──
 router.get("/due-cards", requireAuth, async (req, res) => {
   const userId = (req.user as DbUser).id;
+  res.set('Cache-Control', 'private, max-age=30');
   const result = await pgPool.query(
     `SELECT term_slug, ease_factor, interval_days, repetitions, next_review, last_rating
      FROM card_reviews
@@ -17,9 +18,10 @@ router.get("/due-cards", requireAuth, async (req, res) => {
   res.json(result.rows);
 });
 
-// ── GET /api/study/all-reviews — Get all card review data for a user ──
+// ── GET /api/study/all-reviews ──
 router.get("/all-reviews", requireAuth, async (req, res) => {
   const userId = (req.user as DbUser).id;
+  res.set('Cache-Control', 'private, max-age=30');
   const result = await pgPool.query(
     `SELECT term_slug, ease_factor, interval_days, repetitions, next_review, last_rating
      FROM card_reviews WHERE user_id = $1`,
@@ -28,100 +30,114 @@ router.get("/all-reviews", requireAuth, async (req, res) => {
   res.json(result.rows);
 });
 
-// ── POST /api/study/review — Record a card review (SM-2 update) ──
+// ── POST /api/study/review — SM-2 update (single UPSERT, no pre-read) ──
 router.post("/review", requireAuth, async (req, res) => {
   const userId = (req.user as DbUser).id;
   const { term_slug, rating } = req.body;
-  // rating: 1=Again, 2=Hard, 3=Good, 4=Easy
   if (!term_slug || typeof rating !== "number" || rating < 1 || rating > 4) {
     return res.status(400).json({ error: "term_slug and rating (1-4) required" });
   }
 
-  // Fetch current review state (or defaults)
-  const existing = await pgPool.query(
-    "SELECT ease_factor, interval_days, repetitions FROM card_reviews WHERE user_id = $1 AND term_slug = $2",
-    [userId, term_slug]
-  );
-
-  let ef = existing.rows[0]?.ease_factor ?? 2.5;
-  let interval = existing.rows[0]?.interval_days ?? 0;
-  let reps = existing.rows[0]?.repetitions ?? 0;
-
-  // SM-2 algorithm
-  // Map rating to quality: 1→0, 2→2, 3→3, 4→5
+  // Single query: fetch + compute + upsert using a CTE
   const qualityMap: Record<number, number> = { 1: 0, 2: 2, 3: 3, 4: 5 };
   const q = qualityMap[rating];
 
-  if (q < 3) {
-    // Failed: reset repetitions
-    reps = 0;
-    interval = 0;
-  } else {
-    reps += 1;
-    if (reps === 1) interval = 1;
-    else if (reps === 2) interval = 6;
-    else interval = Math.round(interval * ef);
-  }
-
-  // Update ease factor
-  ef = Math.max(1.3, ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02)));
-
-  const nextReview = new Date();
-  nextReview.setDate(nextReview.getDate() + Math.max(interval, rating === 1 ? 0 : 1));
-  const nextReviewStr = nextReview.toISOString().split("T")[0];
-
-  await pgPool.query(
-    `INSERT INTO card_reviews (user_id, term_slug, ease_factor, interval_days, repetitions, next_review, last_rating, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+  const result = await pgPool.query(
+    `WITH existing AS (
+       SELECT ease_factor, interval_days, repetitions
+       FROM card_reviews WHERE user_id = $1 AND term_slug = $2
+     ),
+     defaults AS (
+       SELECT
+         COALESCE((SELECT ease_factor FROM existing), 2.5) as ef,
+         COALESCE((SELECT interval_days FROM existing), 0) as iv,
+         COALESCE((SELECT repetitions FROM existing), 0) as reps
+     ),
+     computed AS (
+       SELECT
+         CASE WHEN $3 < 3 THEN 0 ELSE reps + 1 END as new_reps,
+         CASE
+           WHEN $3 < 3 THEN 0
+           WHEN reps = 0 THEN 1
+           WHEN reps = 1 THEN 6
+           ELSE ROUND(iv * ef)
+         END as new_interval,
+         GREATEST(1.3, ef + (0.1 - (5 - $3) * (0.08 + (5 - $3) * 0.02))) as new_ef
+       FROM defaults
+     )
+     INSERT INTO card_reviews (user_id, term_slug, ease_factor, interval_days, repetitions, next_review, last_rating, updated_at)
+     SELECT $1, $2, new_ef, new_interval, new_reps,
+            CURRENT_DATE + GREATEST(new_interval, CASE WHEN $4 = 1 THEN 0 ELSE 1 END)::int,
+            $4, NOW()
+     FROM computed
      ON CONFLICT (user_id, term_slug) DO UPDATE SET
-       ease_factor = $3, interval_days = $4, repetitions = $5,
-       next_review = $6, last_rating = $7, updated_at = NOW()`,
-    [userId, term_slug, ef, interval, reps, nextReviewStr, rating]
+       ease_factor = EXCLUDED.ease_factor,
+       interval_days = EXCLUDED.interval_days,
+       repetitions = EXCLUDED.repetitions,
+       next_review = EXCLUDED.next_review,
+       last_rating = EXCLUDED.last_rating,
+       updated_at = NOW()
+     RETURNING next_review, interval_days, ease_factor`,
+    [userId, term_slug, q, rating]
   );
 
-  res.json({ ok: true, next_review: nextReviewStr, interval, ease_factor: ef });
+  const row = result.rows[0];
+  res.json({ ok: true, next_review: row?.next_review, interval: row?.interval_days, ease_factor: row?.ease_factor });
 });
 
-// ── GET /api/study/streaks — Get streak and daily activity data ──
+// ── GET /api/study/streaks — Streak computed in SQL (not Node.js) ──
 router.get("/streaks", requireAuth, async (req, res) => {
   const userId = (req.user as DbUser).id;
+  res.set('Cache-Control', 'private, max-age=30');
 
-  // Get last 30 days of activity
-  const activity = await pgPool.query(
-    `SELECT activity_date, cards_studied, quiz_answered, time_spent_sec
-     FROM daily_activity
-     WHERE user_id = $1 AND activity_date >= CURRENT_DATE - INTERVAL '30 days'
-     ORDER BY activity_date DESC`,
+  // Single query: streak + today's data + recent activity
+  const result = await pgPool.query(
+    `WITH activity AS (
+       SELECT activity_date, cards_studied, quiz_answered, time_spent_sec
+       FROM daily_activity
+       WHERE user_id = $1 AND activity_date >= CURRENT_DATE - INTERVAL '30 days'
+       ORDER BY activity_date DESC
+     ),
+     streak AS (
+       SELECT COUNT(*) as current_streak FROM (
+         SELECT activity_date,
+                activity_date - (ROW_NUMBER() OVER (ORDER BY activity_date DESC))::int AS grp
+         FROM daily_activity
+         WHERE user_id = $1
+           AND activity_date >= CURRENT_DATE - INTERVAL '365 days'
+           AND (cards_studied > 0 OR quiz_answered > 0)
+         ORDER BY activity_date DESC
+       ) s
+       WHERE grp = (
+         SELECT activity_date - 1::int FROM daily_activity
+         WHERE user_id = $1 AND activity_date = CURRENT_DATE AND (cards_studied > 0 OR quiz_answered > 0)
+         UNION ALL
+         SELECT activity_date FROM daily_activity
+         WHERE user_id = $1 AND activity_date = CURRENT_DATE - 1 AND (cards_studied > 0 OR quiz_answered > 0)
+         LIMIT 1
+       )
+     ),
+     today AS (
+       SELECT cards_studied, quiz_answered, time_spent_sec
+       FROM daily_activity
+       WHERE user_id = $1 AND activity_date = CURRENT_DATE
+     )
+     SELECT
+       COALESCE((SELECT current_streak FROM streak), 0) as current_streak,
+       COALESCE((SELECT cards_studied FROM today), 0) as today_cards,
+       COALESCE((SELECT quiz_answered FROM today), 0) as today_quiz,
+       COALESCE((SELECT time_spent_sec FROM today), 0) as today_time_sec,
+       (SELECT json_agg(row_to_json(a)) FROM activity a) as recent_activity`,
     [userId]
   );
 
-  // Calculate current streak
-  const dates = activity.rows.map((r: any) => r.activity_date.toISOString().split("T")[0]);
-  let streak = 0;
-  const today = new Date();
-  for (let i = 0; i < 365; i++) {
-    const checkDate = new Date(today);
-    checkDate.setDate(checkDate.getDate() - i);
-    const dateStr = checkDate.toISOString().split("T")[0];
-    if (dates.includes(dateStr)) {
-      streak++;
-    } else if (i > 0) {
-      break;
-    }
-    // If today has no activity yet, that's ok (streak doesn't break until end of day)
-  }
-
-  // Total cards studied today
-  const todayRow = activity.rows.find((r: any) =>
-    r.activity_date.toISOString().split("T")[0] === today.toISOString().split("T")[0]
-  );
-
+  const row = result.rows[0];
   res.json({
-    current_streak: streak,
-    today_cards: todayRow?.cards_studied ?? 0,
-    today_quiz: todayRow?.quiz_answered ?? 0,
-    today_time_sec: todayRow?.time_spent_sec ?? 0,
-    recent_activity: activity.rows,
+    current_streak: Number(row?.current_streak) || 0,
+    today_cards: Number(row?.today_cards) || 0,
+    today_quiz: Number(row?.today_quiz) || 0,
+    today_time_sec: Number(row?.today_time_sec) || 0,
+    recent_activity: row?.recent_activity || [],
   });
 });
 
@@ -129,7 +145,6 @@ router.get("/streaks", requireAuth, async (req, res) => {
 router.post("/activity", requireAuth, async (req, res) => {
   const userId = (req.user as DbUser).id;
   const { cards_studied, quiz_answered, time_spent_sec } = req.body;
-
   const cards = Math.max(0, Math.floor(Number(cards_studied) || 0));
   const quiz = Math.max(0, Math.floor(Number(quiz_answered) || 0));
   const time = Math.max(0, Math.floor(Number(time_spent_sec) || 0));
@@ -143,13 +158,13 @@ router.post("/activity", requireAuth, async (req, res) => {
        time_spent_sec = daily_activity.time_spent_sec + $4`,
     [userId, cards, quiz, time]
   );
-
   res.json({ ok: true });
 });
 
-// ── GET /api/study/bookmarks — Get user's bookmarked terms ──
+// ── GET /api/study/bookmarks ──
 router.get("/bookmarks", requireAuth, async (req, res) => {
   const userId = (req.user as DbUser).id;
+  res.set('Cache-Control', 'private, max-age=15');
   const result = await pgPool.query(
     "SELECT term_slug, created_at FROM bookmarks WHERE user_id = $1 ORDER BY created_at DESC",
     [userId]
@@ -157,7 +172,7 @@ router.get("/bookmarks", requireAuth, async (req, res) => {
   res.json(result.rows);
 });
 
-// ── POST /api/study/bookmarks — Toggle bookmark ──
+// ── POST /api/study/bookmarks — Toggle (single query) ──
 router.post("/bookmarks", requireAuth, async (req, res) => {
   const userId = (req.user as DbUser).id;
   const { term_slug } = req.body;
@@ -165,14 +180,13 @@ router.post("/bookmarks", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "term_slug required" });
   }
 
-  // Check if already bookmarked → toggle
-  const existing = await pgPool.query(
-    "SELECT id FROM bookmarks WHERE user_id = $1 AND term_slug = $2",
+  // Single query: delete if exists, insert if not
+  const deleted = await pgPool.query(
+    "DELETE FROM bookmarks WHERE user_id = $1 AND term_slug = $2 RETURNING id",
     [userId, term_slug]
   );
 
-  if (existing.rows.length > 0) {
-    await pgPool.query("DELETE FROM bookmarks WHERE user_id = $1 AND term_slug = $2", [userId, term_slug]);
+  if (deleted.rowCount && deleted.rowCount > 0) {
     res.json({ bookmarked: false });
   } else {
     await pgPool.query(
@@ -183,7 +197,7 @@ router.post("/bookmarks", requireAuth, async (req, res) => {
   }
 });
 
-// ── GET /api/study/session-state/:module — Get persisted session state ──
+// ── GET /api/study/session-state/:module ──
 router.get("/session-state/:module", requireAuth, async (req, res) => {
   const userId = (req.user as DbUser).id;
   const module = String(req.params.module).slice(0, 32);
@@ -194,28 +208,24 @@ router.get("/session-state/:module", requireAuth, async (req, res) => {
   res.json(result.rows[0]?.state_json ?? null);
 });
 
-// ── PUT /api/study/session-state/:module — Save session state ──
+// ── PUT /api/study/session-state/:module ──
 router.put("/session-state/:module", requireAuth, async (req, res) => {
   const userId = (req.user as DbUser).id;
   const module = String(req.params.module).slice(0, 32);
   const stateJson = req.body;
-
   if (!stateJson || typeof stateJson !== "object") {
     return res.status(400).json({ error: "JSON body required" });
   }
-
   await pgPool.query(
     `INSERT INTO session_state (user_id, module, state_json, updated_at)
      VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (user_id, module) DO UPDATE SET
-       state_json = $3, updated_at = NOW()`,
+     ON CONFLICT (user_id, module) DO UPDATE SET state_json = $3, updated_at = NOW()`,
     [userId, module, JSON.stringify(stateJson)]
   );
-
   res.json({ ok: true });
 });
 
-// ── DELETE /api/study/session-state/:module — Clear session state ──
+// ── DELETE /api/study/session-state/:module ──
 router.delete("/session-state/:module", requireAuth, async (req, res) => {
   const userId = (req.user as DbUser).id;
   const module = String(req.params.module).slice(0, 32);

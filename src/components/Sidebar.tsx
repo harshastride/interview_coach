@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, BookOpen, BrainCircuit, MessageSquare, Moon, Sun, LogOut, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { AuthUser } from '../hooks/useAuth';
+import { useDarkMode } from '../hooks/useDarkMode';
 import Logo from './Logo';
 
 interface SidebarProps {
@@ -31,24 +32,17 @@ export default function Sidebar({ currentUser, canUpload, onLogout, onOpenAdmin 
   const location = useLocation();
   const activeId = getActiveId(location.pathname);
 
+  const { isDark, toggleDark } = useDarkMode();
+
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('stint-sidebar-collapsed') === 'true'; }
     catch { return false; }
   });
 
-  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
-
   useEffect(() => {
     try { localStorage.setItem('stint-sidebar-collapsed', String(collapsed)); }
     catch {}
   }, [collapsed]);
-
-  const toggleDark = () => {
-    document.documentElement.classList.toggle('dark');
-    setIsDark((d) => !d);
-    try { localStorage.setItem('stint-dark', document.documentElement.classList.contains('dark') ? '1' : '0'); }
-    catch {}
-  };
 
   return (
     <aside

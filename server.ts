@@ -10,6 +10,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import passport from "passport";
 import rateLimit from "express-rate-limit";
+import compression from "compression";
 
 import { pgPool } from "./src/server/db/pool.ts";
 import { initPg } from "./src/server/db/init.ts";
@@ -42,6 +43,7 @@ async function startServer() {
   app.set("trust proxy", 1);
   const PORT = 3000;
 
+  app.use(compression());
   app.use(express.json({ limit: "10mb" }));
 
   const authLimiter = rateLimit({

@@ -35,7 +35,7 @@ router.post("/progress", requireAuth, async (req, res) => {
     `INSERT INTO user_progress
       (user_id, module, total_terms, completed_terms, quiz_correct, quiz_incorrect, interview_total, interview_answered, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-     ON CONFLICT (user_id) DO UPDATE SET
+     ON CONFLICT (user_id, module) DO UPDATE SET
        module = EXCLUDED.module,
        total_terms = EXCLUDED.total_terms,
        completed_terms = EXCLUDED.completed_terms,

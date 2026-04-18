@@ -6,8 +6,21 @@ import {
   audit,
   type DbUser,
 } from "../middleware/auth.ts";
+import { invalidateContentCache } from "./content.ts";
 
 const router = express.Router();
+
+// Invalidate content cache after any admin write operation
+router.use((req, _res, next) => {
+  if (req.method !== 'GET') {
+    const origJson = _res.json.bind(_res);
+    _res.json = (body: any) => {
+      if (body?.ok) invalidateContentCache();
+      return origJson(body);
+    };
+  }
+  next();
+});
 
 export const VALID_LEVELS = [2, 3, 4, 5];
 

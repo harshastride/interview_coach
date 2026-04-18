@@ -7,64 +7,75 @@ import type { InterviewEntry } from './constants';
 import Sidebar from './components/Sidebar';
 import AdminPanel from './components/AdminPanel';
 
-// Lazy-loaded views for code splitting
-const HomeScreen = React.lazy(() => import('./views/HomeScreen'));
+// Lazy-loaded views — prefetch on idle for instant navigation
+const homeImport = () => import('./views/HomeScreen');
+const flashcardSetupImport = () => import('./views/FlashcardSetup');
+const flashcardStudyImport = () => import('./views/FlashcardStudy');
+const interviewSetupImport = () => import('./views/InterviewSetup');
+const interviewSessionImport = () => import('./views/InterviewSession');
+
+const HomeScreen = React.lazy(homeImport);
 const LoginScreen = React.lazy(() => import('./views/LoginScreen'));
 const AccessDeniedScreen = React.lazy(() => import('./views/AccessDeniedScreen'));
-const FlashcardSetup = React.lazy(() => import('./views/FlashcardSetup'));
-const FlashcardStudy = React.lazy(() => import('./views/FlashcardStudy'));
-const InterviewSetup = React.lazy(() => import('./views/InterviewSetup'));
-const InterviewSession = React.lazy(() => import('./views/InterviewSession'));
+const FlashcardSetup = React.lazy(flashcardSetupImport);
+const FlashcardStudy = React.lazy(flashcardStudyImport);
+const InterviewSetup = React.lazy(interviewSetupImport);
+const InterviewSession = React.lazy(interviewSessionImport);
+
+// Prefetch all routes after initial load (during idle time)
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    requestIdleCallback?.(() => {
+      flashcardSetupImport();
+      interviewSetupImport();
+      flashcardStudyImport();
+      interviewSessionImport();
+    });
+  }, { once: true });
+}
 
 function LoadingSpinner() {
   return (
-    <div className="h-screen flex flex-col items-center justify-center bg-[var(--stint-bg)]">
-      <Loader2 className="w-10 h-10 animate-spin text-[var(--stint-primary)]" />
-      <p className="mt-4 text-sm text-[var(--stint-text-muted)]">Loading&hellip;</p>
+    <div className="h-screen flex items-center justify-center bg-[var(--stint-bg)]">
+      <div className="w-8 h-8 border-3 border-[var(--stint-border)] border-t-[var(--stint-primary)] rounded-full animate-spin" />
     </div>
   );
 }
 
 export default function App() {
-  const { authStatus, currentUser, handleLogout } = useAuth();
-  // Dark mode must be initialized at the app level so it works on all pages
+  const { authStatus, currentUser, handleLogout, bootstrapData } = useAuth();
   useDarkMode();
 
-  // Uploaded content state (fetched when authenticated)
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [uploadedTermsRaw, setUploadedTermsRaw] = useState<{ t: string; d: string; l: number; c: string }[]>([]);
   const [uploadedInterviewRaw, setUploadedInterviewRaw] = useState<InterviewEntry[]>([]);
 
-  // Fetch uploaded content on auth
-  const refreshUploadedContent = useCallback(() => {
-    fetch('/api/content/terms', {
-      credentials: 'include',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-    })
-      .then((r) => r.json())
-      .then((list: { t: string; d: string; l: number; c: string }[]) =>
-        setUploadedTermsRaw(Array.isArray(list) ? list : []),
-      )
-      .catch(() => setUploadedTermsRaw([]));
-
-    fetch('/api/content/interview', {
-      credentials: 'include',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-    })
-      .then((r) => r.json())
-      .then((list: (InterviewEntry & { category?: string })[]) =>
-        setUploadedInterviewRaw(
-          Array.isArray(list)
-            ? list.map((e) => ({ ...e, category: e.category ?? 'General' }))
-            : [],
-        ),
-      )
-      .catch(() => setUploadedInterviewRaw([]));
-  }, []);
-
+  // Use bootstrap data (arrives with auth — no extra round trips)
   useEffect(() => {
-    if (authStatus === 'authenticated') refreshUploadedContent();
-  }, [authStatus, refreshUploadedContent]);
+    if (bootstrapData) {
+      setUploadedTermsRaw(bootstrapData.terms);
+      setUploadedInterviewRaw(
+        bootstrapData.interview.map((e) => ({ ...e, category: e.category ?? 'General' })),
+      );
+    }
+  }, [bootstrapData]);
+
+  // Manual refresh (for admin uploads) — still uses separate calls
+  const refreshUploadedContent = useCallback(() => {
+    const headers = { 'X-Requested-With': 'XMLHttpRequest' };
+    const opts = { credentials: 'include' as const, headers };
+    Promise.all([
+      fetch('/api/content/terms', opts).then((r) => r.json()).catch(() => []),
+      fetch('/api/content/interview', opts).then((r) => r.json()).catch(() => []),
+    ]).then(([terms, interview]) => {
+      setUploadedTermsRaw(Array.isArray(terms) ? terms : []);
+      setUploadedInterviewRaw(
+        Array.isArray(interview)
+          ? interview.map((e: InterviewEntry & { category?: string }) => ({ ...e, category: e.category ?? 'General' }))
+          : [],
+      );
+    });
+  }, []);
 
   // Loading state
   if (authStatus === 'loading') return <LoadingSpinner />;

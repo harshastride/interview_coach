@@ -22,48 +22,36 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           const name = profile.displayName ?? "User";
           const avatarUrl = profile.photos?.[0]?.value ?? null;
 
-          const userRes = await pgPool.query(
-            "SELECT * FROM users WHERE google_id = $1",
-            [googleId]
-          );
+          // Single query: check user + count + allowlist in parallel
+          const [userRes, countRes, allowRes] = await Promise.all([
+            pgPool.query("SELECT * FROM users WHERE google_id = $1", [googleId]),
+            pgPool.query("SELECT COUNT(*) as c FROM users"),
+            pgPool.query("SELECT 1 FROM email_allowlist WHERE email = $1", [email]),
+          ]);
+
           let user = userRes.rows[0] as DbUser | undefined;
-          const countRes = await pgPool.query("SELECT COUNT(*) as c FROM users");
-          const countRow = countRes.rows[0] as { c: number | string };
-          const count = parseInt(String(countRow.c), 10);
+          const count = parseInt(String((countRes.rows[0] as any).c), 10);
+          const onAllowlist = !!allowRes.rows[0];
 
           if (!user) {
-            const allowRes = await pgPool.query(
-              "SELECT 1 FROM email_allowlist WHERE email = $1",
-              [email]
-            );
-            const allowRow = allowRes.rows[0];
             const role = count === 0 ? "admin" : "viewer";
-            const isAllowed = count === 0 ? 1 : allowRow ? 1 : 0;
-            await pgPool.query(
+            const isAllowed = count === 0 ? 1 : onAllowlist ? 1 : 0;
+            // INSERT RETURNING — no need for a separate SELECT
+            const insertRes = await pgPool.query(
               `INSERT INTO users (google_id, email, name, avatar_url, role, is_allowed, last_login)
-               VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+               VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
               [googleId, email, name, avatarUrl, role, isAllowed]
             );
-            const newUserRes = await pgPool.query(
-              "SELECT * FROM users WHERE google_id = $1",
-              [googleId]
-            );
-            user = newUserRes.rows[0] as DbUser;
+            user = insertRes.rows[0] as DbUser;
           } else {
-            const allowRes = await pgPool.query(
-              "SELECT 1 FROM email_allowlist WHERE email = $1",
-              [email]
-            );
-            const isAllowed = user.is_allowed ? 1 : allowRes.rows[0] ? 1 : 0;
-            await pgPool.query(
-              "UPDATE users SET name = $1, avatar_url = $2, last_login = NOW(), is_allowed = $3 WHERE id = $4",
+            const isAllowed = user.is_allowed ? 1 : onAllowlist ? 1 : 0;
+            // UPDATE RETURNING — no need for a separate SELECT
+            const updateRes = await pgPool.query(
+              `UPDATE users SET name = $1, avatar_url = $2, last_login = NOW(), is_allowed = $3
+               WHERE id = $4 RETURNING *`,
               [name, avatarUrl, isAllowed, user.id]
             );
-            const upRes = await pgPool.query(
-              "SELECT * FROM users WHERE google_id = $1",
-              [googleId]
-            );
-            user = upRes.rows[0] as DbUser;
+            user = updateRes.rows[0] as DbUser;
           }
           done(null, user);
         } catch (err) {
@@ -129,6 +117,35 @@ apiAuthRouter.get("/me", (req, res) => {
       role: u.role,
       isAllowed: !!u.is_allowed,
     },
+  });
+});
+
+// Combined bootstrap — auth + content in one round trip
+apiAuthRouter.get("/bootstrap", async (req, res) => {
+  if (!req.isAuthenticated?.()) {
+    return res.json({ authenticated: false });
+  }
+  const u = req.user as DbUser;
+  const user = {
+    id: u.id, email: u.email, name: u.name,
+    avatar_url: u.avatar_url, role: u.role, isAllowed: !!u.is_allowed,
+  };
+
+  if (!u.is_allowed) {
+    return res.json({ authenticated: true, user, terms: [], interview: [] });
+  }
+
+  // Fetch content in parallel
+  const [terms, interview] = await Promise.all([
+    pgPool.query("SELECT t, d, l, c FROM uploaded_terms"),
+    pgPool.query("SELECT question, ideal_answer, role, company, category FROM uploaded_interview"),
+  ]);
+
+  res.json({
+    authenticated: true,
+    user,
+    terms: terms.rows,
+    interview: interview.rows,
   });
 });
 

@@ -30,9 +30,11 @@ export function useCardReviews() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const all = await fetchJson<CardReview[]>('/api/study/all-reviews');
+      const [all, due] = await Promise.all([
+        fetchJson<CardReview[]>('/api/study/all-reviews'),
+        fetchJson<CardReview[]>('/api/study/due-cards'),
+      ]);
       setReviews(all);
-      const due = await fetchJson<CardReview[]>('/api/study/due-cards');
       setDueCards(due);
     } catch { /* ignore */ }
   }, []);
