@@ -63,6 +63,7 @@ export async function initPg() {
         id          SERIAL PRIMARY KEY,
         user_id     INTEGER REFERENCES users(id),
         action      TEXT NOT NULL,
+        target      TEXT,
         detail      TEXT,
         created_at  TIMESTAMPTZ DEFAULT NOW()
       );
@@ -71,7 +72,7 @@ export async function initPg() {
         id           SERIAL PRIMARY KEY,
         user_id      INTEGER REFERENCES users(id),
         name         TEXT NOT NULL,
-        reason       TEXT NOT NULL,
+        reason       TEXT,
         status       TEXT NOT NULL DEFAULT 'pending',
         requested_at TIMESTAMPTZ DEFAULT NOW()
       );

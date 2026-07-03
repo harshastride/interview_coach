@@ -9,7 +9,7 @@ export function useInterview(mergedInterviewBank: InterviewEntry[]) {
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [selectedInterviewCategories, setSelectedInterviewCategories] = useState<string[]>([]);
   const [useRandomInterview, setUseRandomInterview] = useState(false);
-  const [candidateName, setCandidateName] = useState('Candidate');
+  const [candidateName, setCandidateName] = useState('');
   const [sessionQuestions, setSessionQuestions] = useState<InterviewEntry[]>([]);
   const [interviewIndex, setInterviewIndex] = useState(0);
   const [questionAudioDone, setQuestionAudioDone] = useState(false);

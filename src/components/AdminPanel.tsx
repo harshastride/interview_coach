@@ -261,16 +261,34 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                       <option value="manager">manager</option>
                       <option value="viewer">viewer</option>
                     </select>
-                    <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                      <input type="checkbox" className="rounded" checked={!!u.is_allowed} onChange={(e) => fetch('/api/admin/users/' + u.id, { method: 'PATCH', credentials: 'include', headers: FETCH_HEADERS, body: JSON.stringify({ is_allowed: e.target.checked ? 1 : 0 }) }).then(() => fetchUsers())} />
-                      <span>Active</span>
-                    </label>
+                     <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                       <input
+                         type="checkbox"
+                         className="rounded"
+                         checked={!!u.is_allowed}
+                         onChange={(e) => {
+                           const checked = e.target.checked ? 1 : 0;
+                           setUsers((prev) => prev.map((user) => user.id === u.id ? { ...user, is_allowed: checked } : user));
+                           fetch('/api/admin/users/' + u.id, {
+                             method: 'PATCH',
+                             credentials: 'include',
+                             headers: FETCH_HEADERS,
+                             body: JSON.stringify({ is_allowed: checked }),
+                           })
+                             .then((res) => {
+                               if (!res.ok) fetchUsers();
+                             })
+                             .catch(() => fetchUsers());
+                         }}
+                       />
+                       <span>Active</span>
+                     </label>
                     {u.id !== currentUser?.id && (
                       <button
                         type="button"
                         className="p-2 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
                         title="Remove user"
-                        onClick={() => window.confirm(`Remove ${u.name} from access?`) && fetch('/api/admin/users/' + u.id, { method: 'DELETE', credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(fetchUsers)}
+                        onClick={() => window.confirm(`Remove ${u.name} from access?`) && fetch('/api/admin/users/' + u.id, { method: 'DELETE', credentials: 'include', headers: FETCH_HEADERS }).then(fetchUsers)}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -299,7 +317,7 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                     type="button"
                     className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 transition-colors"
                     title="Remove from allowlist"
-                    onClick={() => window.confirm(`Remove ${a.email} from allowlist?`) && fetch('/api/admin/allowlist/' + encodeURIComponent(a.email), { method: 'DELETE', credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(fetchAllowlist)}
+                    onClick={() => window.confirm(`Remove ${a.email} from allowlist?`) && fetch('/api/admin/allowlist/' + encodeURIComponent(a.email), { method: 'DELETE', credentials: 'include', headers: FETCH_HEADERS }).then(fetchAllowlist)}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -316,8 +334,8 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                   <p className="text-sm text-[var(--stint-text-muted)]">{r.email}</p>
                   {r.reason && <p className="text-sm mt-1">{r.reason}</p>}
                   <div className="flex gap-2 mt-2">
-                    <button className="px-3 py-1.5 rounded-full bg-emerald-600 text-white text-sm" onClick={() => fetch('/api/admin/requests/' + r.id + '/approve', { method: 'POST', credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(fetchRequests)}>Approve</button>
-                    <button className="px-3 py-1.5 rounded-full bg-rose-600 text-white text-sm" onClick={() => fetch('/api/admin/requests/' + r.id + '/reject', { method: 'POST', credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(fetchRequests)}>Reject</button>
+                    <button className="px-3 py-1.5 rounded-full bg-emerald-600 text-white text-sm" onClick={() => fetch('/api/admin/requests/' + r.id + '/approve', { method: 'POST', credentials: 'include', headers: FETCH_HEADERS }).then(fetchRequests)}>Approve</button>
+                    <button className="px-3 py-1.5 rounded-full bg-rose-600 text-white text-sm" onClick={() => fetch('/api/admin/requests/' + r.id + '/reject', { method: 'POST', credentials: 'include', headers: FETCH_HEADERS }).then(fetchRequests)}>Reject</button>
                   </div>
                 </div>
               ))}
@@ -502,11 +520,11 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                 <h3 className="font-semibold text-[var(--stint-primary)] mb-3">Interview Q&A (single)</h3>
                 <div className="grid gap-3 max-w-md">
                   <div>
-                    <label htmlFor="admin-int-role" className="block text-xs font-semibold text-[var(--stint-text-muted)] mb-1">Role</label>
+                    <label htmlFor="admin-int-role" className="block text-xs font-semibold text-[var(--stint-text-muted)] mb-1">Role *</label>
                     <input id="admin-int-role" placeholder="e.g. Data Engineer" value={interviewForm.role} onChange={(e) => setInterviewForm((f) => ({ ...f, role: e.target.value }))} className="w-full border border-[var(--stint-border)] rounded-xl px-3 py-2 text-sm" />
                   </div>
                   <div>
-                    <label htmlFor="admin-int-company" className="block text-xs font-semibold text-[var(--stint-text-muted)] mb-1">Company</label>
+                    <label htmlFor="admin-int-company" className="block text-xs font-semibold text-[var(--stint-text-muted)] mb-1">Company *</label>
                     <input id="admin-int-company" placeholder="e.g. Stint Academy" value={interviewForm.company} onChange={(e) => setInterviewForm((f) => ({ ...f, company: e.target.value }))} className="w-full border border-[var(--stint-border)] rounded-xl px-3 py-2 text-sm" />
                   </div>
                   <div>
@@ -529,11 +547,11 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                 <p className="text-xs text-[var(--stint-text-muted)] mb-2">Format: question, ideal_answer (2 columns). Role, company and category below apply to all rows.</p>
                 <div className="grid grid-cols-2 gap-2 max-w-md mb-2">
                   <div>
-                    <label className="block text-xs font-semibold text-[var(--stint-text-muted)] mb-1">Role (for all rows)</label>
+                    <label className="block text-xs font-semibold text-[var(--stint-text-muted)] mb-1">Role (for all rows) *</label>
                     <input value={bulkInterview.role} onChange={(e) => setBulkInterview((b) => ({ ...b, role: e.target.value }))} placeholder="e.g. Data Engineer" className="w-full border border-[var(--stint-border)] rounded-xl px-3 py-2 text-sm" />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-[var(--stint-text-muted)] mb-1">Company (for all rows)</label>
+                    <label className="block text-xs font-semibold text-[var(--stint-text-muted)] mb-1">Company (for all rows) *</label>
                     <input value={bulkInterview.company} onChange={(e) => setBulkInterview((b) => ({ ...b, company: e.target.value }))} placeholder="e.g. Stint Academy" className="w-full border border-[var(--stint-border)] rounded-xl px-3 py-2 text-sm" />
                   </div>
                   <div className="col-span-2">
@@ -579,20 +597,27 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                         </tbody>
                       </table>
                     </div>
-                    <button
-                      type="button"
-                      disabled={bulkImporting || bulkInterview.entries.length === 0 || !bulkInterview.role.trim() || !bulkInterview.company.trim()}
-                      className="mt-2 px-4 py-2 rounded-full bg-[var(--stint-primary)] text-white text-sm font-medium disabled:opacity-50"
-                      onClick={async () => {
-                        setBulkImporting(true);
-                        try {
-                          const r = await fetch('/api/admin/interview/bulk', { method: 'POST', credentials: 'include', headers: FETCH_HEADERS, body: JSON.stringify({ entries: bulkInterview.entries, role: bulkInterview.role.trim(), company: bulkInterview.company.trim(), category: bulkInterview.category.trim() || undefined }) });
-                          if (r.ok) { setBulkInterview((b) => ({ ...b, entries: [], preview: [] })); fetchInterview(); onContentRefresh(); } else { const j = await r.json().catch(() => ({})); alert(j.error === 'Duplicates found' ? `Duplicates: ${(j.duplicates || []).join(', ')}` : j.error || 'Import failed'); }
-                        } finally { setBulkImporting(false); }
-                      }}
-                    >
-                      {bulkImporting ? 'Importing\u2026' : `Import ${bulkInterview.entries.length} Q&As`}
-                    </button>
+                    <div className="flex flex-col gap-1.5 mt-2">
+                      <button
+                        type="button"
+                        disabled={bulkImporting || bulkInterview.entries.length === 0 || !bulkInterview.role.trim() || !bulkInterview.company.trim()}
+                        className="px-4 py-2 rounded-full bg-[var(--stint-primary)] text-white text-sm font-medium disabled:opacity-50 w-fit"
+                        onClick={async () => {
+                          setBulkImporting(true);
+                          try {
+                            const r = await fetch('/api/admin/interview/bulk', { method: 'POST', credentials: 'include', headers: FETCH_HEADERS, body: JSON.stringify({ entries: bulkInterview.entries, role: bulkInterview.role.trim(), company: bulkInterview.company.trim(), category: bulkInterview.category.trim() || undefined }) });
+                            if (r.ok) { setBulkInterview((b) => ({ ...b, entries: [], preview: [] })); fetchInterview(); onContentRefresh(); } else { const j = await r.json().catch(() => ({})); alert(j.error === 'Duplicates found' ? `Duplicates: ${(j.duplicates || []).join(', ')}` : j.error || 'Import failed'); }
+                          } finally { setBulkImporting(false); }
+                        }}
+                      >
+                        {bulkImporting ? 'Importing\u2026' : `Import ${bulkInterview.entries.length} Q&As`}
+                      </button>
+                      {(!bulkInterview.role.trim() || !bulkInterview.company.trim()) && (
+                        <p className="text-[11px] text-rose-500 font-medium">
+                          * Please enter a Role and Company above to enable import
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </section>

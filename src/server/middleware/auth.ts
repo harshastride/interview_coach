@@ -26,7 +26,7 @@ export async function audit(
   detail?: object
 ) {
   await pgPool.query(
-    "INSERT INTO audit_log (performed_by, action, target, detail) VALUES ($1, $2, $3, $4)",
+    "INSERT INTO audit_log (user_id, action, target, detail) VALUES ($1, $2, $3, $4)",
     [userId, action, target, detail ? JSON.stringify(detail) : null]
   );
 }
@@ -98,8 +98,11 @@ export function csrfProtection(
       ? requestedWithHeader[0] ?? ""
       : requestedWithHeader ?? "";
 
+    const hasContentType = !!contentType;
+    const isJson = contentType.includes("application/json");
+
     if (
-      !contentType.includes("application/json") ||
+      (hasContentType && !isJson) ||
       xRequestedWith.toLowerCase() !== "xmlhttprequest"
     ) {
       return res.status(403).json({ error: "CSRF validation failed" });

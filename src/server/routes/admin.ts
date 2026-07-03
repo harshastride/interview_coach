@@ -7,6 +7,7 @@ import {
   type DbUser,
 } from "../middleware/auth.ts";
 import { invalidateContentCache } from "./content.ts";
+import { notifyUserStatus } from "../middleware/sse.ts";
 
 const router = express.Router();
 
@@ -46,10 +47,26 @@ router.patch("/users/:id", requireAdmin, async (req, res) => {
     await audit((req.user as DbUser).id, "change_role", String(id), { role });
   }
   if (is_allowed !== undefined) {
+    const userRes = await pgPool.query("SELECT email FROM users WHERE id = $1", [id]);
+    const userEmail = userRes.rows[0]?.email;
+
     await pgPool.query("UPDATE users SET is_allowed = $1 WHERE id = $2", [
       is_allowed ? 1 : 0,
       id,
     ]);
+
+    if (userEmail) {
+      if (is_allowed) {
+        await pgPool.query(
+          `INSERT INTO email_allowlist (email, added_by, added_at) VALUES ($1, $2, NOW())
+           ON CONFLICT (email) DO UPDATE SET added_by = $2, added_at = NOW()`,
+          [userEmail, (req.user as DbUser).id]
+        );
+      } else {
+        await pgPool.query("DELETE FROM email_allowlist WHERE email = $1", [userEmail]);
+      }
+    }
+
     await audit(
       (req.user as DbUser).id,
       is_allowed ? "grant_access" : "revoke_access",
@@ -64,9 +81,39 @@ router.delete("/users/:id", requireAdmin, async (req, res) => {
   if (id === (req.user as DbUser).id) {
     return res.status(400).json({ error: "Cannot remove your own account" });
   }
-  await pgPool.query("UPDATE users SET is_allowed = 0 WHERE id = $1", [id]);
-  await audit((req.user as DbUser).id, "revoke_access", String(id));
-  res.json({ ok: true });
+
+  const client = await pgPool.connect();
+  try {
+    await client.query("BEGIN");
+    
+    // Set added_by to NULL in uploaded terms and interviews to preserve content
+    await client.query("UPDATE uploaded_terms SET added_by = NULL WHERE added_by = $1", [id]);
+    await client.query("UPDATE uploaded_interview SET added_by = NULL WHERE added_by = $1", [id]);
+    
+    // Set added_by to NULL in email_allowlist (if references exist)
+    await client.query("UPDATE email_allowlist SET added_by = NULL WHERE added_by = $1", [id]);
+    
+    // Set user_id to NULL in audit_log and access_requests to preserve logs
+    await client.query("UPDATE audit_log SET user_id = NULL WHERE user_id = $1", [id]);
+    await client.query("UPDATE access_requests SET user_id = NULL WHERE user_id = $1", [id]);
+    
+    // Fetch user email for the audit log before deleting
+    const userRes = await client.query("SELECT email FROM users WHERE id = $1", [id]);
+    const targetEmail = userRes.rows[0]?.email ?? String(id);
+
+    // Delete the user completely (cascades to card_reviews, bookmarks, user_progress, daily_activity, session_state)
+    await client.query("DELETE FROM users WHERE id = $1", [id]);
+    
+    await client.query("COMMIT");
+    
+    await audit((req.user as DbUser).id, "delete_user", targetEmail);
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 });
 
 // ── Allowlist ──────────────────────────────────────────────────────────
@@ -104,7 +151,11 @@ router.delete("/allowlist/:email", requireAdmin, async (req, res) => {
 // ── Access requests ────────────────────────────────────────────────────
 router.get("/requests", requireAdmin, async (_req, res) => {
   const result = await pgPool.query(
-    "SELECT * FROM access_requests WHERE status = 'pending' ORDER BY requested_at"
+    `SELECT r.id, r.user_id, r.name, r.reason, r.status, r.requested_at, u.email
+     FROM access_requests r
+     JOIN users u ON r.user_id = u.id
+     WHERE r.status = 'pending'
+     ORDER BY r.requested_at`
   );
   res.json(result.rows);
 });
@@ -112,10 +163,13 @@ router.get("/requests", requireAdmin, async (_req, res) => {
 router.post("/requests/:id/approve", requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const rowRes = await pgPool.query(
-    "SELECT * FROM access_requests WHERE id = $1 AND status = 'pending'",
+    `SELECT r.id, r.user_id, u.email
+     FROM access_requests r
+     JOIN users u ON r.user_id = u.id
+     WHERE r.id = $1 AND r.status = 'pending'`,
     [id]
   );
-  const row = rowRes.rows[0] as { id: number; email: string } | undefined;
+  const row = rowRes.rows[0] as { id: number; user_id: number; email: string } | undefined;
   if (!row) {
     return res.status(404).json({ error: "Request not found" });
   }
@@ -130,22 +184,27 @@ router.post("/requests/:id/approve", requireAdmin, async (req, res) => {
     [id]
   );
   await audit((req.user as DbUser).id, "approve_access_request", row.email);
+  notifyUserStatus(row.user_id, "approved");
   res.json({ ok: true });
 });
 
 router.post("/requests/:id/reject", requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const rowRes = await pgPool.query(
-    "SELECT * FROM access_requests WHERE id = $1 AND status = 'pending'",
+    `SELECT r.id, r.user_id, u.email
+     FROM access_requests r
+     JOIN users u ON r.user_id = u.id
+     WHERE r.id = $1 AND r.status = 'pending'`,
     [id]
   );
-  const row = rowRes.rows[0] as { email: string } | undefined;
+  const row = rowRes.rows[0] as { id: number; user_id: number; email: string } | undefined;
   if (!row) return res.status(404).json({ error: "Request not found" });
   await pgPool.query(
     "UPDATE access_requests SET status = 'rejected' WHERE id = $1",
     [id]
   );
   await audit((req.user as DbUser).id, "reject_access_request", row.email);
+  notifyUserStatus(row.user_id, "rejected");
   res.json({ ok: true });
 });
 
@@ -153,7 +212,7 @@ router.post("/requests/:id/reject", requireAdmin, async (req, res) => {
 router.get("/audit", requireAdmin, async (_req, res) => {
   const result = await pgPool.query(
     `SELECT a.id, a.action, a.target, a.detail, a.created_at, u.email as actor_email
-     FROM audit_log a LEFT JOIN users u ON a.performed_by = u.id
+     FROM audit_log a LEFT JOIN users u ON a.user_id = u.id
      ORDER BY a.created_at DESC LIMIT 100`
   );
   res.json(result.rows);

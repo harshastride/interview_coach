@@ -43,7 +43,7 @@ function LoadingSpinner() {
 }
 
 export default function App() {
-  const { authStatus, currentUser, handleLogout, bootstrapData } = useAuth();
+  const { authStatus, currentUser, handleLogout, bootstrapData, enterApp } = useAuth();
   useDarkMode();
 
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -108,7 +108,7 @@ export default function App() {
           {authStatus === 'access_denied' && (
             <Route
               path="*"
-              element={<AccessDeniedScreen user={currentUser} onLogout={handleLogout} />}
+              element={<AccessDeniedScreen user={currentUser} onLogout={handleLogout} onEnter={enterApp} />}
             />
           )}
           {authStatus === 'authenticated' && (

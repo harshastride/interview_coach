@@ -3,6 +3,7 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { pgPool } from "../db/pool.ts";
 import type { DbUser } from "../middleware/auth.ts";
+import { addConnection } from "../middleware/sse.ts";
 
 const router = express.Router();
 
@@ -102,11 +103,18 @@ router.get(
 // ── API auth routes (mounted at /api/auth) ─────────────────────────────
 export const apiAuthRouter = express.Router();
 
-apiAuthRouter.get("/me", (req, res) => {
+apiAuthRouter.get("/me", async (req, res) => {
   if (!req.isAuthenticated?.()) {
     return res.json({ authenticated: false });
   }
   const u = req.user as DbUser;
+  
+  const reqRes = await pgPool.query(
+    "SELECT status FROM access_requests WHERE user_id = $1 ORDER BY requested_at DESC LIMIT 1",
+    [u.id]
+  );
+  const requestStatus = reqRes.rows[0]?.status ?? null;
+
   res.json({
     authenticated: true,
     user: {
@@ -116,6 +124,7 @@ apiAuthRouter.get("/me", (req, res) => {
       avatar_url: u.avatar_url,
       role: u.role,
       isAllowed: !!u.is_allowed,
+      requestStatus,
     },
   });
 });
@@ -126,9 +135,17 @@ apiAuthRouter.get("/bootstrap", async (req, res) => {
     return res.json({ authenticated: false });
   }
   const u = req.user as DbUser;
+  
+  const reqRes = await pgPool.query(
+    "SELECT status FROM access_requests WHERE user_id = $1 ORDER BY requested_at DESC LIMIT 1",
+    [u.id]
+  );
+  const requestStatus = reqRes.rows[0]?.status ?? null;
+
   const user = {
     id: u.id, email: u.email, name: u.name,
     avatar_url: u.avatar_url, role: u.role, isAllowed: !!u.is_allowed,
+    requestStatus,
   };
 
   if (!u.is_allowed) {
@@ -146,6 +163,40 @@ apiAuthRouter.get("/bootstrap", async (req, res) => {
     user,
     terms: terms.rows,
     interview: interview.rows,
+  });
+});
+
+apiAuthRouter.get("/stream-status", (req, res) => {
+  if (!req.isAuthenticated?.()) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const u = req.user as DbUser;
+
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+
+  if (typeof (res as any).flush === "function") {
+    (res as any).flush();
+  }
+
+  // Heartbeat comment every 20 seconds to prevent proxy connection timeouts
+  const heartbeat = setInterval(() => {
+    res.write(":\n\n");
+    if (typeof (res as any).flush === "function") {
+      (res as any).flush();
+    }
+  }, 20000);
+
+  const removeConnection = addConnection(u.id, res);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    removeConnection();
   });
 });
 

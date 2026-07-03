@@ -79,7 +79,7 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
 
   const [sessionQuestions] = useState<InterviewEntry[]>(routeState.sessionQuestions ?? []);
   const [selectedRole] = useState<string>(routeState.selectedRole ?? '');
-  const [candidateName] = useState<string>(routeState.candidateName ?? 'Candidate');
+  const [candidateName] = useState<string>(routeState.candidateName ?? '');
 
   const [interviewPhase, setInterviewPhase] = useState<'intro' | 'in_progress' | 'complete'>('intro');
   const [interviewIndex, setInterviewIndex] = useState(0);
@@ -198,7 +198,9 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
   /* ── Navigation ─────────────────────────────────────── */
   const goNext = () => {
     if (interviewIndex >= totalQuestions - 1) {
-      const closing = `Thank you for your time, ${name}. We'll be in touch soon.`;
+      const closing = name
+        ? `Thank you for your time, ${name}. We'll be in touch soon.`
+        : `Thank you for your time. We'll be in touch soon.`;
       speakTerm(closing, 0, () => setInterviewPhase('complete'));
     } else {
       setSlideDir(1);
@@ -246,7 +248,9 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
      ═══════════════════════════════════════════════════════ */
   if (interviewPhase === 'intro') {
     const beginInterview = () => {
-      const greeting = `Hi ${name}, welcome to your interview for ${role}. Let's begin.`;
+      const greeting = name
+        ? `Hi ${name}, welcome to your interview for ${role}. Let's begin.`
+        : `Welcome to your interview for ${role}. Let's begin.`;
       speakTerm(greeting, 0, () => setInterviewPhase('in_progress'));
     };
     const topBar: GlobalTopBarProps = { sectionLabel: 'Interview Practice', stepLabel: 'Setup', showBack: true, onBack: () => { stopAudio(); navigate('/interview'); }, onHome: () => { stopAudio(); navigate('/'); }, rightSlot: headerRightSlot };
@@ -302,8 +306,12 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
   if (interviewPhase === 'complete') {
     const elapsed = Math.round((Date.now() - startTime) / 60000);
     const playFullSession = () => {
-      const greeting = `Hi ${name}, welcome to your interview for ${role}. Let's begin.`;
-      const closing = `Thank you for your time, ${name}. We'll be in touch soon.`;
+      const greeting = name
+        ? `Hi ${name}, welcome to your interview for ${role}. Let's begin.`
+        : `Welcome to your interview for ${role}. Let's begin.`;
+      const closing = name
+        ? `Thank you for your time, ${name}. We'll be in touch soon.`
+        : `Thank you for your time. We'll be in touch soon.`;
       const steps: ({ type: 'speak'; text: string } | { type: 'answer'; q: string; a: string })[] = [
         { type: 'speak', text: greeting },
         ...sessionQuestions.flatMap((e) => [
@@ -332,7 +340,9 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
           <div className="w-full max-w-2xl mx-auto px-4 py-6 space-y-5">
             {/* Session summary */}
             <div className="rounded-2xl bg-gradient-to-br from-[var(--stint-primary)]/10 to-[var(--stint-primary)]/5 border border-[var(--stint-primary)]/20 p-6 text-center">
-              <h1 className="text-2xl font-serif font-bold text-[var(--stint-primary)] mb-1">Great practice, {name}!</h1>
+              <h1 className="text-2xl font-serif font-bold text-[var(--stint-primary)] mb-1">
+                {name ? `Great practice, ${name}!` : 'Great practice!'}
+              </h1>
               <p className="text-sm text-[var(--stint-text-muted)] mb-4">Session complete</p>
               <div className="flex justify-center gap-6">
                 <div>

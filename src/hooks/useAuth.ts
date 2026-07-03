@@ -77,6 +77,56 @@ export function useAuth() {
       .catch(() => setAuthStatus('unauthenticated'));
   }, []);
 
+  // Establish an EventSource connection if access is denied, so the user lands on the home page automatically once approved (via server-sent events)
+  useEffect(() => {
+    if (authStatus !== 'access_denied') return;
+
+    const eventSource = new EventSource('/api/auth/stream-status');
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.status === 'approved') {
+          // Re-fetch bootstrap data to fully load terms and interviews once allowed,
+          // but do NOT change authStatus yet so the candidate sees the completed steps first
+          fetch('/api/auth/bootstrap', {
+            credentials: 'include',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          })
+            .then((r) => r.json())
+            .then((res: { authenticated?: boolean; user?: AuthUser; terms?: any[]; interview?: any[] }) => {
+              if (res.authenticated && res.user?.isAllowed) {
+                setCurrentUser(res.user);
+                const bd = {
+                  terms: Array.isArray(res.terms) ? res.terms : [],
+                  interview: Array.isArray(res.interview) ? res.interview : [],
+                };
+                setBootstrapData(bd);
+                setCachedBootstrap(bd);
+              }
+            })
+            .catch(() => {});
+        } else if (data.status === 'rejected') {
+          setCurrentUser((prev) => prev ? { ...prev, requestStatus: 'rejected' } : null);
+        }
+      } catch (err) {
+        console.error('Error parsing SSE event data:', err);
+      }
+    };
+
+    eventSource.onerror = () => {
+      console.warn('SSE connection lost. Reconnecting...');
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [authStatus]);
+
+  const enterApp = useCallback(() => {
+    setAuthStatus('authenticated');
+  }, []);
+
   const handleLogout = useCallback(() => {
     fetch('/api/auth/logout', {
       method: 'POST',
@@ -89,5 +139,5 @@ export function useAuth() {
     });
   }, []);
 
-  return { authStatus, currentUser, handleLogout, bootstrapData };
+  return { authStatus, currentUser, handleLogout, bootstrapData, enterApp };
 }

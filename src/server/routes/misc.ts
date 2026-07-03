@@ -64,13 +64,13 @@ router.post("/access-request", async (req, res) => {
     return res.status(401).json({ error: "Not authenticated" });
   }
   const { name, reason } = req.body;
-  const email = (req.user as DbUser).email;
+  const userId = (req.user as DbUser).id;
   if (!name?.trim()) {
     return res.status(400).json({ error: "Name required" });
   }
   await pgPool.query(
-    "INSERT INTO access_requests (email, name, reason, status) VALUES ($1, $2, $3, 'pending')",
-    [email, String(name).trim(), reason ? String(reason).trim() : null]
+    "INSERT INTO access_requests (user_id, name, reason, status) VALUES ($1, $2, $3, 'pending')",
+    [userId, String(name).trim(), reason ? String(reason).trim() : null]
   );
   res.json({ ok: true });
 });
