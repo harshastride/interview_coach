@@ -38,18 +38,20 @@ router.patch("/users/:id", requireAdmin, async (req, res) => {
   if (id === (req.user as DbUser).id) {
     return res.status(400).json({ error: "Cannot modify your own account" });
   }
+
+  const userRes = await pgPool.query("SELECT email FROM users WHERE id = $1", [id]);
+  const userEmail = userRes.rows[0]?.email;
+  const targetName = userEmail || String(id);
+
   const { role, is_allowed } = req.body;
   if (role !== undefined) {
     if (!["admin", "manager", "viewer"].includes(role)) {
       return res.status(400).json({ error: "Invalid role" });
     }
     await pgPool.query("UPDATE users SET role = $1 WHERE id = $2", [role, id]);
-    await audit((req.user as DbUser).id, "change_role", String(id), { role });
+    await audit((req.user as DbUser).id, "change_role", targetName, { role });
   }
   if (is_allowed !== undefined) {
-    const userRes = await pgPool.query("SELECT email FROM users WHERE id = $1", [id]);
-    const userEmail = userRes.rows[0]?.email;
-
     await pgPool.query("UPDATE users SET is_allowed = $1 WHERE id = $2", [
       is_allowed ? 1 : 0,
       id,
@@ -84,7 +86,7 @@ router.patch("/users/:id", requireAdmin, async (req, res) => {
     await audit(
       (req.user as DbUser).id,
       is_allowed ? "grant_access" : "revoke_access",
-      String(id)
+      targetName
     );
   }
   res.json({ ok: true });
