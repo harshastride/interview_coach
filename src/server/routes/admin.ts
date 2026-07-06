@@ -67,6 +67,20 @@ router.patch("/users/:id", requireAdmin, async (req, res) => {
       }
     }
 
+    if (is_allowed) {
+      await pgPool.query(
+        "UPDATE access_requests SET status = 'approved' WHERE user_id = $1 AND status = 'pending'",
+        [id]
+      );
+      notifyUserStatus(id, "approved");
+    } else {
+      await pgPool.query(
+        "UPDATE access_requests SET status = 'rejected' WHERE user_id = $1 AND status = 'pending'",
+        [id]
+      );
+      notifyUserStatus(id, "rejected");
+    }
+
     await audit(
       (req.user as DbUser).id,
       is_allowed ? "grant_access" : "revoke_access",
@@ -154,7 +168,7 @@ router.get("/requests", requireAdmin, async (_req, res) => {
     `SELECT r.id, r.user_id, r.name, r.reason, r.status, r.requested_at, u.email
      FROM access_requests r
      JOIN users u ON r.user_id = u.id
-     WHERE r.status = 'pending'
+     WHERE r.status = 'pending' AND u.is_allowed = 0
      ORDER BY r.requested_at`
   );
   res.json(result.rows);
@@ -180,8 +194,8 @@ router.post("/requests/:id/approve", requireAdmin, async (req, res) => {
   );
   await pgPool.query("UPDATE users SET is_allowed = 1 WHERE email = $1", [row.email]);
   await pgPool.query(
-    "UPDATE access_requests SET status = 'approved' WHERE id = $1",
-    [id]
+    "UPDATE access_requests SET status = 'approved' WHERE user_id = $1 AND status = 'pending'",
+    [row.user_id]
   );
   await audit((req.user as DbUser).id, "approve_access_request", row.email);
   notifyUserStatus(row.user_id, "approved");
@@ -200,8 +214,8 @@ router.post("/requests/:id/reject", requireAdmin, async (req, res) => {
   const row = rowRes.rows[0] as { id: number; user_id: number; email: string } | undefined;
   if (!row) return res.status(404).json({ error: "Request not found" });
   await pgPool.query(
-    "UPDATE access_requests SET status = 'rejected' WHERE id = $1",
-    [id]
+    "UPDATE access_requests SET status = 'rejected' WHERE user_id = $1 AND status = 'pending'",
+    [row.user_id]
   );
   await audit((req.user as DbUser).id, "reject_access_request", row.email);
   notifyUserStatus(row.user_id, "rejected");
