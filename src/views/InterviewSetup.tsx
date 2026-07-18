@@ -23,7 +23,7 @@ export default function InterviewSetup({ uploadedInterviewRaw, currentUser, onCo
 
   const [selectedInterviewCategories, setSelectedInterviewCategories] = useState<string[]>([]);
   const [useRandomInterview, setUseRandomInterview] = useState(false);
-  const [candidateName, setCandidateName] = useState('Candidate');
+  const [candidateName, setCandidateName] = useState('');
 
   const mergedInterviewBank = useMemo(() => uploadedInterviewRaw, [uploadedInterviewRaw]);
   const interviewRoles = useMemo(() => [...new Set(mergedInterviewBank.map((e) => e.role))], [mergedInterviewBank]);
@@ -51,7 +51,7 @@ export default function InterviewSetup({ uploadedInterviewRaw, currentUser, onCo
       state: {
         sessionQuestions: ten,
         selectedRole: role,
-        candidateName,
+        candidateName: candidateName.trim() || 'Candidate',
       },
     });
   };
@@ -121,8 +121,9 @@ export default function InterviewSetup({ uploadedInterviewRaw, currentUser, onCo
             <input
               id="candidate-name"
               type="text"
+              autoComplete="off"
               value={candidateName}
-              onChange={(e) => setCandidateName(e.target.value.trim() || 'Candidate')}
+              onChange={(e) => setCandidateName(e.target.value)}
               placeholder="Candidate"
               className="w-full px-4 py-3 rounded-xl border border-[var(--stint-border)] bg-[var(--stint-bg-elevated)] text-[var(--stint-text)] placeholder:text-[var(--stint-text-muted)]"
             />

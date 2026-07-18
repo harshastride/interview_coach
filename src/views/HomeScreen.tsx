@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import { BookOpen, MessageSquare, BrainCircuit, Flame, Target, Search, ChevronRight, Layers } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { BookOpen, MessageSquare, BrainCircuit, Flame, Target, Search, ChevronRight, Layers, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { AppLayout } from '../components/GlobalNav';
@@ -20,20 +20,150 @@ interface HomeScreenProps {
   uploadedInterviewRaw: InterviewEntry[];
 }
 
+const GROUP_DEFS = [
+  {
+    key: 'azure',
+    label: 'Azure Services',
+    match: (c: string) => c.toLowerCase().startsWith('azure'),
+  },
+  {
+    key: 'data',
+    label: 'Data & Analytics',
+    match: (c: string) => /^(data |microsoft |advanced)/i.test(c),
+  },
+  {
+    key: 'engineering',
+    label: 'Engineering & Tools',
+    match: (c: string) => /^(spark|orchestr|devops)/i.test(c),
+  },
+];
+
+function getGroups(allTopics: string[]) {
+  const placed = new Set<string>();
+  const groups: { label: string; subtopics: string[] }[] = [];
+
+  for (const def of GROUP_DEFS) {
+    const matched = allTopics.filter((c) => def.match(c) && !placed.has(c));
+    matched.forEach((c) => placed.add(c));
+    if (matched.length > 0) {
+      groups.push({ label: def.label, subtopics: matched });
+    }
+  }
+
+  const others = allTopics.filter((c) => !placed.has(c));
+  if (others.length > 0) {
+    groups.push({ label: 'Other Topics', subtopics: others });
+  }
+
+  return groups;
+}
+
 export default function HomeScreen({ currentUser, onContentRefresh, uploadedTermsRaw, uploadedInterviewRaw }: HomeScreenProps) {
   const navigate = useNavigate();
   const { handleLogout } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showToast, setShowToast] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const canUpload = currentUser?.role === 'admin' || currentUser?.role === 'manager';
   const { streakData } = useStreaks();
 
   const bottomNavProps = useBottomNav('home');
 
+  useEffect(() => {
+    if (showToast) {
+      const timer = setTimeout(() => setShowToast(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setIsFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const suggestions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return { mainTopics: [], subtopics: [] };
+
+    const allTopics = [...new Set(uploadedTermsRaw.map((t) => t.c))];
+    const groups = getGroups(allTopics);
+
+    const matchedMainTopics: { label: string; subtopics: string[] }[] = [];
+    const matchedSubtopics = new Set<string>();
+    
+    // Helper for matching: 1-letter uses startsWith, otherwise includes
+    const isMatch = (text: string, q: string) => {
+      if (q.length === 1) return text.toLowerCase().startsWith(q);
+      return text.toLowerCase().includes(q);
+    };
+
+    for (const group of groups) {
+      const matchesMainTopic = isMatch(group.label, query);
+      const matchingSubs = group.subtopics.filter(sub => isMatch(sub, query));
+      
+      if (matchesMainTopic) {
+        matchedMainTopics.push({ label: group.label, subtopics: group.subtopics });
+        group.subtopics.forEach(sub => matchedSubtopics.add(sub));
+      } else if (matchingSubs.length > 0) {
+        matchingSubs.forEach(sub => matchedSubtopics.add(sub));
+      }
+    }
+
+    return {
+      mainTopics: matchedMainTopics,
+      subtopics: Array.from(matchedSubtopics)
+    };
+  }, [searchQuery, uploadedTermsRaw]);
+
+  const handleSuggestionClick = (text: string, categories: string[]) => {
+    setSearchQuery(text);
+    setIsFocused(false);
+    navigate('/flashcards/study', { state: { selectedCategories: categories, selectedLevel: null, searchQuery: "" } });
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
-    const allCats = [...new Set(uploadedTermsRaw.map((t) => t.c))];
-    navigate('/flashcards/study', { state: { selectedCategories: allCats, selectedLevel: null, searchQuery: searchQuery.trim() } });
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return;
+    
+    const allTopics = [...new Set(uploadedTermsRaw.map((t) => t.c))];
+    const groups = getGroups(allTopics);
+    
+    let matchedCategories = new Set<string>();
+    let isMainTopicMatch = false;
+
+    // 1. Check Main Topics and Subtopics
+    for (const group of groups) {
+      if (group.label.toLowerCase().includes(query)) {
+        isMainTopicMatch = true;
+        group.subtopics.forEach(c => matchedCategories.add(c));
+      } else {
+        group.subtopics.forEach(c => {
+          if (c.toLowerCase().includes(query)) matchedCategories.add(c);
+        });
+      }
+    }
+
+    // 2. Check Flashcards (terms and definitions)
+    const flashcardMatches = uploadedTermsRaw.filter(t => 
+      t.t.toLowerCase().includes(query) || t.d.toLowerCase().includes(query)
+    );
+
+    if (matchedCategories.size > 0 || flashcardMatches.length > 0) {
+      if (isMainTopicMatch) {
+        navigate('/flashcards/study', { state: { selectedCategories: Array.from(matchedCategories), selectedLevel: null, searchQuery: "" } });
+      } else {
+        navigate('/flashcards/study', { state: { selectedCategories: allTopics, selectedLevel: null, searchQuery: query } });
+      }
+    } else {
+      setShowToast(true);
+    }
   };
 
   const headerRightSlot = (
@@ -65,7 +195,25 @@ export default function HomeScreen({ currentUser, onContentRefresh, uploadedTerm
 
   return (
     <AppLayout topBar={topBar} bottomNav={bottomNavProps}>
-      <div className="w-full max-w-5xl mx-auto px-4 md:px-6 py-5 md:py-8 space-y-6 md:space-y-8">
+      <div className="w-full max-w-5xl mx-auto px-4 md:px-6 py-5 md:py-8 space-y-6 md:space-y-8 relative">
+        <AnimatePresence>
+          {showToast && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, x: 20 }}
+              animate={{ opacity: 1, y: 0, x: 0 }}
+              exit={{ opacity: 0, y: -20, x: 20 }}
+              className="fixed top-20 right-4 md:right-6 z-50 bg-[var(--stint-bg-elevated)] border border-[var(--stint-border)] text-[var(--stint-text)] px-4 py-3 rounded-xl shadow-lg flex items-center gap-3"
+            >
+              <span className="text-sm font-medium">Currently, this content is not available.</span>
+              <button 
+                onClick={() => setShowToast(false)} 
+                className="text-[var(--stint-text-muted)] hover:text-[var(--stint-text)] transition-colors p-1"
+              >
+                <X size={16} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── Welcome + Search Row ─────────────────────── */}
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
@@ -82,15 +230,66 @@ export default function HomeScreen({ currentUser, onContentRefresh, uploadedTerm
           </motion.div>
 
           <form onSubmit={handleSearch} className="w-full md:w-72 shrink-0">
-            <div className="relative">
+            <div className="relative" ref={searchContainerRef}>
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--stint-text-muted)]" />
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search flashcards..."
+                onChange={(e) => { setSearchQuery(e.target.value); setIsFocused(true); }}
+                onFocus={() => setIsFocused(true)}
+                placeholder="Search topics or terms..."
                 className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-[var(--stint-border)] bg-[var(--stint-bg-elevated)] text-sm text-[var(--stint-text)] placeholder:text-[var(--stint-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--stint-primary)]/30 focus:border-[var(--stint-primary)] transition-all"
               />
+              <AnimatePresence>
+                {isFocused && searchQuery.trim() && (suggestions.mainTopics.length > 0 || suggestions.subtopics.length > 0) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 5 }}
+                    className="absolute top-full left-0 right-0 mt-2 z-50 bg-[var(--stint-bg-elevated)] border border-[var(--stint-border)] rounded-xl shadow-lg overflow-hidden flex flex-col max-h-[60vh] overflow-y-auto"
+                  >
+                    {suggestions.mainTopics.length > 0 && (
+                      <div className="px-3 py-2 border-b border-[var(--stint-border)] last:border-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--stint-text-muted)] mb-1 pl-2">
+                          Main Topics
+                        </p>
+                        <div className="flex flex-col gap-0.5">
+                          {suggestions.mainTopics.map(main => (
+                            <button 
+                              key={`main-${main.label}`}
+                              type="button"
+                              onClick={() => handleSuggestionClick(main.label, main.subtopics)}
+                              className="w-full text-left pl-3 pr-3 py-2 rounded-lg text-sm text-[var(--stint-primary)] font-medium hover:bg-[var(--stint-primary)]/10 transition-colors"
+                            >
+                              {main.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {suggestions.subtopics.length > 0 && (
+                      <div className="px-3 py-2 border-b border-[var(--stint-border)] last:border-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--stint-text-muted)] mb-1 pl-2">
+                          Subtopics
+                        </p>
+                        <div className="flex flex-col gap-0.5">
+                          {suggestions.subtopics.map(sub => (
+                            <button
+                              key={`sub-${sub}`}
+                              type="button"
+                              onClick={() => handleSuggestionClick(sub, [sub])}
+                              className="w-full text-left pl-3 pr-3 py-2 rounded-lg text-sm text-[var(--stint-text)] hover:bg-[var(--stint-primary)]/10 hover:text-[var(--stint-primary)] transition-colors"
+                            >
+                              {sub}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </form>
         </div>

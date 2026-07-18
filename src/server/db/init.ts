@@ -7,6 +7,21 @@ export async function initPg() {
 
   const client = await pgPool.connect();
   try {
+    // Ensure audit_log has the required performed_by and target columns if it exists
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'audit_log') THEN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_log' AND column_name='performed_by') THEN
+            ALTER TABLE audit_log ADD COLUMN performed_by INTEGER REFERENCES users(id);
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='audit_log' AND column_name='target') THEN
+            ALTER TABLE audit_log ADD COLUMN target TEXT;
+          END IF;
+        END IF;
+      END $$;
+    `);
+
     // Quick check — if users table exists, skip full init (already done)
     const check = await client.query(`
       SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users' LIMIT 1
@@ -60,11 +75,12 @@ export async function initPg() {
       );
 
       CREATE TABLE IF NOT EXISTS audit_log (
-        id          SERIAL PRIMARY KEY,
-        user_id     INTEGER REFERENCES users(id),
-        action      TEXT NOT NULL,
-        detail      TEXT,
-        created_at  TIMESTAMPTZ DEFAULT NOW()
+        id           SERIAL PRIMARY KEY,
+        performed_by INTEGER REFERENCES users(id),
+        action       TEXT NOT NULL,
+        target       TEXT,
+        detail       TEXT,
+        created_at   TIMESTAMPTZ DEFAULT NOW()
       );
 
       CREATE TABLE IF NOT EXISTS access_requests (
@@ -92,13 +108,15 @@ export async function initPg() {
       CREATE TABLE IF NOT EXISTS card_reviews (
         id          SERIAL PRIMARY KEY,
         user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        term_id     INTEGER NOT NULL REFERENCES uploaded_terms(id) ON DELETE CASCADE,
+        term_slug   TEXT NOT NULL,
         ease_factor REAL NOT NULL DEFAULT 2.5,
-        interval_d  REAL NOT NULL DEFAULT 0,
+        interval_days REAL NOT NULL DEFAULT 0,
         repetitions INTEGER NOT NULL DEFAULT 0,
         next_review TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         last_review TIMESTAMPTZ,
-        UNIQUE(user_id, term_id)
+        last_rating INTEGER,
+        updated_at  TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(user_id, term_slug)
       );
 
       CREATE TABLE IF NOT EXISTS daily_activity (
@@ -107,15 +125,16 @@ export async function initPg() {
         activity_date DATE NOT NULL DEFAULT CURRENT_DATE,
         cards_studied INTEGER NOT NULL DEFAULT 0,
         quiz_answered INTEGER NOT NULL DEFAULT 0,
+        time_spent_sec INTEGER NOT NULL DEFAULT 0,
         UNIQUE(user_id, activity_date)
       );
 
       CREATE TABLE IF NOT EXISTS bookmarks (
         id        SERIAL PRIMARY KEY,
         user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        term_id   INTEGER NOT NULL REFERENCES uploaded_terms(id) ON DELETE CASCADE,
+        term_slug TEXT NOT NULL,
         created_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(user_id, term_id)
+        UNIQUE(user_id, term_slug)
       );
 
       CREATE TABLE IF NOT EXISTS session_state (

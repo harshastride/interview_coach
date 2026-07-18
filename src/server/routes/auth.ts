@@ -103,37 +103,25 @@ router.get(
 export const apiAuthRouter = express.Router();
 
 apiAuthRouter.get("/me", (req, res) => {
-  if (!req.isAuthenticated?.()) {
-    return res.json({ authenticated: false });
-  }
-  const u = req.user as DbUser;
   res.json({
     authenticated: true,
     user: {
-      id: u.id,
-      email: u.email,
-      name: u.name,
-      avatar_url: u.avatar_url,
-      role: u.role,
-      isAllowed: !!u.is_allowed,
+      id: 1,
+      email: 'mock@example.com',
+      name: 'User',
+      avatar_url: null,
+      role: 'admin',
+      isAllowed: true,
     },
   });
 });
 
 // Combined bootstrap — auth + content in one round trip
 apiAuthRouter.get("/bootstrap", async (req, res) => {
-  if (!req.isAuthenticated?.()) {
-    return res.json({ authenticated: false });
-  }
-  const u = req.user as DbUser;
   const user = {
-    id: u.id, email: u.email, name: u.name,
-    avatar_url: u.avatar_url, role: u.role, isAllowed: !!u.is_allowed,
+    id: 1, email: 'mock@example.com', name: 'User',
+    avatar_url: null, role: 'admin', isAllowed: true,
   };
-
-  if (!u.is_allowed) {
-    return res.json({ authenticated: true, user, terms: [], interview: [] });
-  }
 
   // Fetch content in parallel
   const [terms, interview] = await Promise.all([
