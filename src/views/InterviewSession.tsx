@@ -205,11 +205,14 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
     fluency: number;
     confidence: number;
     speaking_pace: number;
+    pitch: number;
     performance: string;
     feedback: string;
     suggestion: string;
     missed_words: string[];
   } | null>(null);
+  
+  const [isEvaluating, setIsEvaluating] = useState(false);
 
   const popupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [activeEmojis, setActiveEmojis] = useState<FallingEmoji[]>([]);
@@ -396,6 +399,10 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
               <span className="text-[10px] text-[var(--stint-text-muted)] font-medium block">Speaking Pace</span>
               <span className="font-bold text-[var(--stint-text)]">{evaluationPopup.speaking_pace}%</span>
             </div>
+            <div className="bg-[var(--stint-bg)]/40 p-2.5 rounded-xl border border-[var(--stint-border)]/50">
+              <span className="text-[10px] text-[var(--stint-text-muted)] font-medium block">Pitch</span>
+              <span className="font-bold text-[var(--stint-text)]">{evaluationPopup.pitch}%</span>
+            </div>
           </div>
 
           {evaluationPopup.missed_words && evaluationPopup.missed_words.length > 0 && (
@@ -473,7 +480,8 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
                           (silenceDuration > 5.0)
                         );
 
-      if (isCompleted) {
+      if (isCompleted && !isEvaluating) {
+        setIsEvaluating(true);
         stopListening();
         evaluateAnswer(entry.question, combinedTranscript, idealFull, role, entry.category)
           .then((res) => {
@@ -481,10 +489,11 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
               showEvaluationPopup(res);
             }
           })
-          .catch((err) => console.error('Auto-evaluation failed:', err));
+          .catch((err) => console.error('Auto-evaluation failed:', err))
+          .finally(() => setIsEvaluating(false));
       }
     }
-  }, [combinedTranscript, interviewPhase, isListening, idealFull, entry, role, evaluateAnswer, getSilenceDuration, typewriterDone]);
+  }, [combinedTranscript, interviewPhase, isListening, idealFull, entry, role, evaluateAnswer, getSilenceDuration, typewriterDone, isEvaluating]);
 
   // Trigger overall score celebration/motivation emoji rain on complete page
   useEffect(() => {
@@ -651,7 +660,10 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
   };
 
   const handleNextQuestion = () => {
-    if (isListening && !evaluationPopup) {
+    if (isEvaluating) return;
+
+    if (!evaluationPopup) {
+      setIsEvaluating(true);
       const spokenText = combinedTranscript.trim();
       const currentQuestion = entry?.question ?? '';
       const currentIdeal = entry?.ideal_answer ?? '';
@@ -666,7 +678,8 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
             showEvaluationPopup(res);
           }
         })
-        .catch((err) => console.error('Evaluation failed:', err));
+        .catch((err) => console.error('Evaluation failed:', err))
+        .finally(() => setIsEvaluating(false));
       
       return;
     }
@@ -1050,7 +1063,9 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
                   : "bg-[var(--stint-primary)] text-white hover:bg-[var(--stint-primary-dark)] shadow-[var(--stint-primary)]/20"
               )}
             >
-              {countdown > 0 ? (
+              {isEvaluating ? (
+                <span>Evaluating...</span>
+              ) : countdown > 0 ? (
                 <span>Next Question in {countdown}s</span>
               ) : isLast ? (
                 'Finish Interview'

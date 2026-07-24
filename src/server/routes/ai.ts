@@ -517,6 +517,7 @@ function simulateEvaluation(userAnswer: string, idealAnswer: string) {
   const clarity = Math.min(100, Math.max(20, Math.round(matchRatio * 85 + Math.random() * 15)));
   const confidence = Math.min(100, Math.max(20, Math.round(matchRatio * 88 + Math.random() * 12)));
   const pronunciation = Math.min(100, Math.max(20, Math.round(matchRatio * 92 + Math.random() * 8)));
+  const pitch = Math.min(100, Math.max(40, Math.round(75 + Math.random() * 25)));
   const speaking_pace = Math.min(100, Math.max(30, Math.round(80 + Math.random() * 20)));
 
   // Extract up to 5 unique missed significant words
@@ -548,6 +549,7 @@ function simulateEvaluation(userAnswer: string, idealAnswer: string) {
     fluency,
     confidence,
     speaking_pace,
+    pitch,
     performance,
     missed_words,
     feedback,
@@ -593,10 +595,11 @@ Evaluate their reading performance based on these criteria:
 5. fluency: 0 to 100 percentage.
 6. confidence: 0 to 100 percentage.
 7. speaking_pace: 0 to 100 percentage.
-8. performance: Must be exactly one of: "Excellent", "Good", "Average", or "Needs Improvement".
-9. feedback: Overall feedback about their reading session (max 30 words).
-10. suggestion: A short suggestion for improvement (max 12 words).
-11. missed_words: Array of up to 5 main words they skipped or mispronounced.
+8. pitch: 0 to 100 percentage, representing vocal inflection and tonal variation.
+9. performance: Must be exactly one of: "Excellent", "Good", "Average", or "Needs Improvement".
+10. feedback: Overall feedback about their reading session (max 30 words).
+11. suggestion: A short suggestion for improvement (max 12 words).
+12. missed_words: Array of up to 5 main words they skipped or mispronounced.
 
 Respond with JSON only (no markdown, no code fences):
 {
@@ -607,6 +610,7 @@ Respond with JSON only (no markdown, no code fences):
   "fluency": <number 0-100>,
   "confidence": <number 0-100>,
   "speaking_pace": <number 0-100>,
+  "pitch": <number 0-100>,
   "performance": "<performance string>",
   "feedback": "<overall feedback string>",
   "suggestion": "<suggestion string>",
@@ -626,6 +630,7 @@ Respond with JSON only (no markdown, no code fences):
         fluency: Number(parsed.fluency) || 0,
         confidence: Number(parsed.confidence) || 0,
         speaking_pace: Number(parsed.speaking_pace) || 0,
+        pitch: Number(parsed.pitch) || 0,
         performance: String(parsed.performance || "Average"),
         feedback: String(parsed.feedback || ""),
         suggestion: String(parsed.suggestion || ""),
