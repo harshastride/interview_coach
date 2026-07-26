@@ -9,6 +9,7 @@ export interface AuthUser {
   avatar_url: string | null;
   role: string;
   isAllowed: boolean;
+  requestStatus?: 'pending' | 'approved' | 'rejected';
 }
 
 const FETCH_HEADERS = {

@@ -9,6 +9,8 @@ import AdminPanel from '../components/AdminPanel';
 import type { AuthUser } from '../hooks/useAuth';
 import { useAuth } from '../hooks/useAuth';
 import { useTTS } from '../hooks/useTTS';
+import { useSTT } from '../hooks/useSTT';
+import type { EvaluationResult } from '../hooks/useSTT';
 import type { InterviewEntry } from '../constants';
 import { HeaderRightSlot, useBottomNav } from './shared';
 import InterviewAvatar from '../components/InterviewAvatar';
@@ -68,6 +70,7 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
   const location = useLocation();
   const { handleLogout } = useAuth();
   const { isSpeaking, speakTerm, speakAnswer, stopAudio } = useTTS();
+  const { isListening, transcript, startListening, stopListening, resetTranscript, evaluateAnswer } = useSTT();
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const canUpload = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
@@ -92,9 +95,13 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
   const [isPlayingFullSession, setIsPlayingFullSession] = useState(false);
   const [slideDir, setSlideDir] = useState(1);
   const [startTime] = useState(() => Date.now());
+  const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const evaluationTriggeredRef = useRef(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const answerContainerRef = useRef<HTMLDivElement>(null);
   const swipeStartX = useRef(0);
   const swipeStartY = useRef(0);
 
@@ -176,9 +183,13 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
     if (idx < 0 || idx >= sessionQuestions.length) return;
     setQuestionAudioDone(false);
     setTypewriterDisplayed('');
+    setEvaluation(null);
+    setIsEvaluating(false);
+    evaluationTriggeredRef.current = false;
+    resetTranscript();
     const q = sessionQuestions[idx].question;
     speakTerm(q, 0, () => setQuestionAudioDone(true));
-  }, [interviewPhase, interviewIndex, sessionQuestions.length]);
+  }, [interviewPhase, interviewIndex, sessionQuestions.length, resetTranscript]);
 
   /* ── Typewriter effect (starts after question TTS) ──── */
   const typewriterMs = { slow: 120, medium: 60, fast: 30 }[typewriterSpeed];
@@ -194,6 +205,47 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
     }, typewriterMs);
     return () => clearTimeout(t);
   }, [interviewPhase, questionAudioDone, interviewIndex, sessionQuestions, typewriterDisplayed, typewriterMs]);
+
+  /* ── Auto-scroll for Ideal Answer ───────────────────── */
+  useEffect(() => {
+    if (answerContainerRef.current) {
+      answerContainerRef.current.scrollTop = answerContainerRef.current.scrollHeight;
+    }
+  }, [typewriterDisplayed, transcript]);
+
+  /* ── STT Auto-start & Auto-completion logic ─────────── */
+  useEffect(() => {
+    if (interviewPhase === 'in_progress' && questionAudioDone && sessionQuestions.length > 0 && micGranted) {
+      startListening();
+    } else {
+      stopListening();
+    }
+    return () => stopListening();
+  }, [interviewPhase, questionAudioDone, startListening, stopListening, sessionQuestions.length, micGranted]);
+
+  useEffect(() => {
+    if (interviewPhase !== 'in_progress' || !questionAudioDone || isEvaluating || evaluationTriggeredRef.current) return;
+    const entry = sessionQuestions[interviewIndex];
+    if (!entry || !transcript) return;
+
+    const idealWords = entry.ideal_answer.toLowerCase().replace(/[.,!?;:]/g, '').trim().split(/\s+/);
+    if (idealWords.length < 3) return;
+    const targetEnd = idealWords.slice(-3).join(' ');
+    
+    if (transcript.toLowerCase().includes(targetEnd)) {
+      evaluationTriggeredRef.current = true;
+      setIsEvaluating(true);
+      stopListening();
+      
+      evaluateAnswer(entry.question, transcript, entry.ideal_answer, role, entry.category)
+        .then((res) => {
+          setEvaluation(res);
+        })
+        .finally(() => {
+          setIsEvaluating(false);
+        });
+    }
+  }, [transcript, interviewPhase, questionAudioDone, sessionQuestions, interviewIndex, isEvaluating, role, evaluateAnswer, stopListening]);
 
   /* ── Navigation ─────────────────────────────────────── */
   const goNext = () => {
@@ -489,16 +541,22 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
 
                 {/* Answer — appears after question TTS finishes */}
                 {questionAudioDone && (
-                  <div className="p-5">
+                  <div className="p-5" ref={answerContainerRef} style={{ maxHeight: '40vh', overflowY: 'auto' }}>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 mb-2">Answer</p>
-                    <p className="text-lg md:text-xl leading-relaxed text-[var(--stint-text)] whitespace-pre-wrap">
+                    <p className="text-lg md:text-xl leading-relaxed text-[var(--stint-text)] whitespace-pre-wrap mb-4">
                       {typewriterDisplayed}
                       {!typewriterDone && (
                         <span className="inline-block w-2 h-4 ml-0.5 bg-[var(--stint-primary)] animate-pulse align-middle" aria-hidden="true" />
                       )}
                     </p>
+                    {isListening && (
+                      <div className="mt-2 p-3 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500 mb-1">Your response (Listening...)</p>
+                        <p className="text-sm italic text-slate-600 dark:text-slate-300">{transcript || '...'}</p>
+                      </div>
+                    )}
 
-                    {typewriterDone && (
+                    {typewriterDone && !isListening && (
                       <div className="flex items-center gap-3 mt-4">
                         <button
                           onClick={() => speakAnswer(entry.question, entry.ideal_answer)}
@@ -515,6 +573,36 @@ export default function InterviewSession({ uploadedInterviewRaw, currentUser, on
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Coaching / Evaluation */}
+                {evaluation && (
+                  <div className="p-5 border-t border-[var(--stint-border)] bg-[var(--stint-primary)]/5">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--stint-primary)] mb-2">AI Feedback</p>
+                    <div className="flex gap-4 mb-3">
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-[var(--stint-primary)]">{evaluation.accuracy}%</div>
+                        <div className="text-[10px] text-[var(--stint-text-muted)]">Accuracy</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-[var(--stint-primary)]">{evaluation.fluency}%</div>
+                        <div className="text-[10px] text-[var(--stint-text-muted)]">Fluency</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xl font-bold text-[var(--stint-primary)]">{evaluation.completeness}%</div>
+                        <div className="text-[10px] text-[var(--stint-text-muted)]">Completeness</div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-[var(--stint-text)] font-medium mb-1">{evaluation.coaching}</p>
+                    {evaluation.improvements.length > 0 && (
+                      <p className="text-xs text-[var(--stint-text-muted)] mt-2"><strong>Tip:</strong> {evaluation.improvements[0]}</p>
+                    )}
+                  </div>
+                )}
+                {isEvaluating && (
+                  <div className="p-5 border-t border-[var(--stint-border)]">
+                    <p className="text-sm text-[var(--stint-text-muted)] animate-pulse font-medium">Evaluating your response...</p>
                   </div>
                 )}
 

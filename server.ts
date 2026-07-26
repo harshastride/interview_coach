@@ -88,6 +88,25 @@ async function startServer() {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // --- MOCK AUTHENTICATION (Bypass Login) ---
+  app.use(async (req, res, next) => {
+    try {
+      // Find the primary admin user who uploaded the data (User ID 2)
+      const mockUserRes = await pgPool.query(`SELECT * FROM users WHERE id = 2`);
+      const mockUser = mockUserRes.rows[0];
+
+      if (mockUser) {
+        req.user = mockUser;
+        req.isAuthenticated = (() => true) as any;
+      }
+      next();
+    } catch (err) {
+      console.error("Mock auth error:", err);
+      next(err);
+    }
+  });
+  // ------------------------------------------
+
   // Phase 1.5: Apply CSRF protection globally (after session/passport init)
   app.use(csrfProtection);
 
