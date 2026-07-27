@@ -32,7 +32,7 @@ import AdminPanel from '../components/AdminPanel';
 import type { AuthUser } from '../hooks/useAuth';
 import { useAuth } from '../hooks/useAuth';
 import { useTTS } from '../hooks/useTTS';
-import { useCardReviews, useBookmarks, useSessionState } from '../hooks/useStudyAPI';
+import { useCardReviews, useBookmarks, useSessionState, useStreaks } from '../hooks/useStudyAPI';
 import { HeaderRightSlot, useBottomNav, uniqueId, slug, fetchJson } from './shared';
 
 type Mode = 'flashcard' | 'quiz';
@@ -89,6 +89,7 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
   const { submitReview } = useCardReviews();
   const { bookmarkedSlugs, toggleBookmark } = useBookmarks();
   const { state: savedSession, loaded: sessionLoaded, saveState: saveSession, clearState: clearSession } = useSessionState<SavedSession>(sessionModule);
+  const { recordActivity } = useStreaks();
 
   // Build terms from uploaded data
   const mergedTermsSource = useMemo<Flashcard[]>(() => {
@@ -313,6 +314,7 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
     if (!currentCard) return;
     const termSlug = slug(currentCard.term);
     submitReview(termSlug, rating);
+    recordActivity(1, 0, 10);
 
     if (rating >= 3) {
       // Good or Easy — mark correct
@@ -325,7 +327,7 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
       setScore((prev) => ({ ...prev, incorrect: prev.incorrect + 1 }));
       handleNext();
     }
-  }, [currentCard, submitReview, handleNext]);
+  }, [currentCard, submitReview, handleNext, recordActivity]);
 
   /* ---------------------------------------------------------------- */
   /*  Quiz select                                                      */
@@ -333,6 +335,7 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
   const handleQuizSelect = async (option: string) => {
     if (selectedOption || !currentCard) return;
     setSelectedOption(option);
+    recordActivity(0, 1, 15);
     const isCorrect = option === currentCard.term;
     if (isCorrect) {
       setScore((prev) => ({ ...prev, correct: prev.correct + 1 }));

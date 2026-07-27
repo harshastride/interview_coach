@@ -396,31 +396,29 @@ export default function HomeScreen({ currentUser, onContentRefresh, uploadedTerm
         </motion.div>
 
         {/* ── Daily Goal Progress ─────────────────────── */}
-        {streakData && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <Card variant="accent" className="p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-[var(--stint-text)]">Daily Goal</h3>
-                  <p className="text-xs text-[var(--stint-text-muted)]">
-                    {goalPercent >= 100 ? 'Goal reached! Keep going!' : `${dailyGoal - todayTotal} more to reach your daily goal`}
-                  </p>
-                </div>
-                <span className={cn(
-                  'font-mono text-sm font-bold tabular-nums',
-                  goalPercent >= 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--stint-primary)]',
-                )}>
-                  {goalPercent}%
-                </span>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          <Card variant="accent" className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--stint-text)]">Daily Goal</h3>
+                <p className="text-xs text-[var(--stint-text-muted)]">
+                  {goalPercent >= 100 ? 'Goal reached! Keep going!' : `${dailyGoal - todayTotal} more to reach your daily goal`}
+                </p>
               </div>
-              <ProgressBar percent={goalPercent} color={goalPercent >= 100 ? 'success' : 'primary'} />
-              <div className="flex justify-between mt-2 text-[11px] text-[var(--stint-text-muted)]">
-                <span>{todayCards} cards studied</span>
-                <span>{todayQuiz} quiz answers</span>
-              </div>
-            </Card>
-          </motion.div>
-        )}
+              <span className={cn(
+                'font-mono text-sm font-bold tabular-nums',
+                goalPercent >= 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--stint-primary)]',
+              )}>
+                {goalPercent}%
+              </span>
+            </div>
+            <ProgressBar percent={goalPercent} color={goalPercent >= 100 ? 'success' : 'primary'} />
+            <div className="flex justify-between mt-2 text-[11px] text-[var(--stint-text-muted)]">
+              <span>{todayCards} cards studied</span>
+              <span>{todayQuiz} quiz answers</span>
+            </div>
+          </Card>
+        </motion.div>
 
         {/* ── Topic Overview ──────────────────────────── */}
         {totalCategories > 0 && (
