@@ -128,7 +128,7 @@ export function AppLayout({ children, topBar, bottomNav }: AppLayoutProps) {
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-[var(--stint-bg)] text-[var(--stint-text)] font-sans md:ml-60">
       <GlobalTopBar {...topBar} />
-      <main className="flex-1 min-h-0 overflow-auto flex flex-col pb-20 md:pb-0">
+      <main id="main-scroll-container" className="flex-1 min-h-0 overflow-auto flex flex-col pb-20 md:pb-0">
         {children}
       </main>
       <GlobalBottomNav {...bottomNav} />

@@ -66,6 +66,9 @@ export function useTTS() {
       clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
     setIsSpeaking(false);
   }, []);
 
@@ -148,8 +151,21 @@ export function useTTS() {
         scheduleRetry(() => speakTerm(text, retryCount + 1, onEnded), delay);
         return;
       }
-      setIsSpeaking(false);
-      onEnded?.();
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          onEnded?.();
+        };
+        utterance.onerror = () => {
+          setIsSpeaking(false);
+          onEnded?.();
+        };
+        window.speechSynthesis.speak(utterance);
+      } else {
+        setIsSpeaking(false);
+        onEnded?.();
+      }
     }
   }, [isSpeaking, playBuffer, scheduleRetry]);
 
@@ -214,8 +230,21 @@ export function useTTS() {
         scheduleRetry(() => speakAnswer(questionText, answerText, retryCount + 1, onEnded), delay);
         return;
       }
-      setIsSpeaking(false);
-      onEnded?.();
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(answerText);
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          onEnded?.();
+        };
+        utterance.onerror = () => {
+          setIsSpeaking(false);
+          onEnded?.();
+        };
+        window.speechSynthesis.speak(utterance);
+      } else {
+        setIsSpeaking(false);
+        onEnded?.();
+      }
     }
   }, [isSpeaking, playBuffer, scheduleRetry]);
 

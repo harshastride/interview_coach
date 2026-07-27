@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 const FETCH_HEADERS = {
   'X-Requested-With': 'XMLHttpRequest',
@@ -54,69 +54,125 @@ export function useSTT() {
   const [interimTranscript, setInterimTranscript] = useState('');
 
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const isListeningRef = useRef(false);
+  const finalTextRef = useRef('');
+  const isVoiceActiveRef = useRef(true);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const lastActiveTimeRef = useRef<number>(Date.now());
 
-  const isSupported = !!getSpeechRecognition();
+  // Cache the SpeechRecognition constructor once to avoid repeated window lookups
+  const speechRecognitionCtorRef = useRef<SpeechRecognitionCtor | null>(
+    typeof window === 'undefined' ? null : ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null)
+  );
+  const isSupported = !!speechRecognitionCtorRef.current;
+
+  // Helper to stop and clear the current recognition instance
+  const stopRecognition = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        // remove handlers then stop to avoid callbacks after clearing
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
+  }, []);
 
   const resetTranscript = useCallback(() => {
     setTranscript('');
     setInterimTranscript('');
+    finalTextRef.current = '';
   }, []);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
+    isListeningRef.current = false;
+    stopRecognition();
     setIsListening(false);
     setInterimTranscript('');
-  }, []);
 
-  const startListening = useCallback(() => {
-    const SpeechRecognitionClass = getSpeechRecognition();
+    if (scriptProcessorRef.current) {
+      scriptProcessorRef.current.disconnect();
+      scriptProcessorRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+  }, [stopRecognition]);
+
+  const startListening = useCallback((stream?: MediaStream | null) => {
+    const SpeechRecognitionClass = speechRecognitionCtorRef.current;
     if (!SpeechRecognitionClass) return;
 
-    // Stop any existing recognition
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
+    // Stop any existing recognition cleanly
+    stopRecognition();
 
     resetTranscript();
     setIsListening(true);
+    isListeningRef.current = true;
+    lastActiveTimeRef.current = Date.now();
 
-    const recognition = new SpeechRecognitionClass();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    const startSession = () => {
+      if (!isListeningRef.current) return;
+      
+      const recognition = new SpeechRecognitionClass();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
 
-    let finalText = '';
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        // Update the active time since speech engine successfully transcribed words
+        lastActiveTimeRef.current = Date.now();
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalText += result[0].transcript + ' ';
-          setTranscript(finalText.trim());
-        } else {
-          interim += result[0].transcript;
+        let interim = '';
+        let currentFinal = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            currentFinal += result[0].transcript + ' ';
+          } else {
+            interim += result[0].transcript;
+          }
         }
+        if (currentFinal) {
+          finalTextRef.current += currentFinal;
+          setTranscript(finalTextRef.current.trim());
+        }
+        setInterimTranscript(interim);
+      };
+
+      recognition.onerror = (event: Event) => {
+        console.warn('SpeechRecognition error:', (event as any).error);
+      };
+
+      recognition.onend = () => {
+        // Auto-restart if we should still be listening
+        if (isListeningRef.current) {
+          setTimeout(() => {
+            startSession();
+          }, 100);
+        } else {
+          setIsListening(false);
+          setInterimTranscript('');
+        }
+      };
+
+      try {
+        recognition.start();
+        recognitionRef.current = recognition;
+      } catch (err) {
+        console.warn('Failed to start SpeechRecognition:', err);
       }
-      setInterimTranscript(interim);
     };
 
-    recognition.onerror = (event: Event) => {
-      console.warn('SpeechRecognition error:', (event as any).error);
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      setInterimTranscript('');
-    };
-
-    recognition.start();
-    recognitionRef.current = recognition;
-  }, [resetTranscript]);
+    // Add a 300ms delay to let the browser release the audio capture interface
+    setTimeout(() => {
+      startSession();
+    }, 300);
+  }, [resetTranscript, stopRecognition]);
 
   /** Call the AI evaluation endpoint to score reading quality */
   const evaluateAnswer = useCallback(async (
@@ -145,6 +201,10 @@ export function useSTT() {
     }
   }, []);
 
+  const getSilenceDuration = useCallback(() => {
+    return (Date.now() - lastActiveTimeRef.current) / 1000;
+  }, []);
+
   return {
     isListening,
     transcript,
@@ -154,5 +214,6 @@ export function useSTT() {
     stopListening,
     resetTranscript,
     evaluateAnswer,
+    getSilenceDuration,
   };
 }

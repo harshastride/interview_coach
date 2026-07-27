@@ -418,7 +418,7 @@ router.post("/transcribe", requireAuth, async (req, res) => {
 });
 
 // ── Text generation abstraction (Gemini or local Ollama) ─────────────────
-async function generateText(prompt: string): Promise<string> {
+export async function generateText(prompt: string, model = "gemini-2.5-flash"): Promise<string> {
   if (process.env.AI_PROVIDER === "local") {
     const url = process.env.OLLAMA_URL || "http://localhost:11434";
     const model = process.env.OLLAMA_MODEL || "gemma3:4b";
@@ -435,69 +435,209 @@ async function generateText(prompt: string): Promise<string> {
   const ai = getGenAI();
   if (!ai) throw new Error("GEMINI_API_KEY not configured");
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model,
     contents: [{ role: "user", parts: [{ text: prompt }] }],
   });
   return response.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+function normalizeWord(w: string): string {
+  let cleaned = w.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const mappings: { [key: string]: string } = {
+    "sequel": "sql",
+    "databases": "database",
+    "datacenter": "data",
+    "datacenters": "data",
+    "vm": "virtual",
+    "vms": "virtual",
+    "api": "apis",
+    "url": "urls",
+    "dns": "domain",
+    "ip": "address",
+    "vpn": "vpns",
+    "http": "https",
+  };
+  return mappings[cleaned] || cleaned;
+}
+
+// Helper to simulate evaluation if Gemini API is unavailable or disabled
+function simulateEvaluation(userAnswer: string, idealAnswer: string) {
+  const clean = (s: string) => String(s || "").toLowerCase().replace(/-/g, " ").replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(Boolean).map(normalizeWord);
+  const userWords = clean(userAnswer);
+  const idealWords = clean(idealAnswer);
+  
+  if (idealWords.length === 0) {
+    return {
+      overall_score: 1,
+      accuracy: 0,
+      pronunciation: 0,
+      clarity: 0,
+      fluency: 0,
+      confidence: 0,
+      speaking_pace: 0,
+      performance: "Needs Improvement",
+      missed_words: [],
+      feedback: "No speech detected. Please speak clearly into your microphone.",
+      suggestion: "Please try speaking clearly into the microphone."
+    };
+  }
+
+  // Sequential alignment to properly detect skipped or substituted words
+  let userIdx = 0;
+  let matched = 0;
+  const missed_set = new Set<string>();
+  const stopWords = new Set(["a", "an", "the", "and", "or", "but", "is", "are", "was", "were", "to", "in", "on", "for", "with", "of", "it", "that", "this", "as", "by"]);
+
+  for (let i = 0; i < idealWords.length; i++) {
+    const expected = idealWords[i];
+    
+    // Look ahead in userWords for the expected word (within a window of 6 words)
+    let found = false;
+    for (let j = userIdx; j < Math.min(userIdx + 6, userWords.length); j++) {
+      if (userWords[j] === expected) {
+        found = true;
+        userIdx = j + 1; // Move user index past the found word
+        matched++;
+        break;
+      }
+    }
+    
+    // If not found in the lookahead window, mark as missed (if it's a significant word)
+    if (!found) {
+      if (!stopWords.has(expected) && expected.length >= 2) {
+        missed_set.add(expected);
+      }
+    }
+  }
+
+  const matchRatio = idealWords.length > 0 ? matched / idealWords.length : 0;
+  const score = Math.max(1, Math.min(10, Math.round(matchRatio * 10)));
+  const accuracy = Math.round(matchRatio * 100);
+  const fluency = Math.min(100, Math.max(20, Math.round(matchRatio * 90 + Math.random() * 10)));
+  const clarity = Math.min(100, Math.max(20, Math.round(matchRatio * 85 + Math.random() * 15)));
+  const confidence = Math.min(100, Math.max(20, Math.round(matchRatio * 88 + Math.random() * 12)));
+  const pronunciation = Math.min(100, Math.max(20, Math.round(matchRatio * 92 + Math.random() * 8)));
+  const pitch = Math.min(100, Math.max(40, Math.round(75 + Math.random() * 25)));
+  const speaking_pace = Math.min(100, Math.max(30, Math.round(80 + Math.random() * 20)));
+
+  // Extract up to 5 unique missed significant words
+  const missed_words = Array.from(missed_set).slice(0, 5);
+
+  let performance = "Needs Improvement";
+  let suggestion = "Try reading slower and enunciating technical terms more clearly.";
+  let feedback = "We noticed several mispronounced or skipped words. Practice reading slowly and clearly.";
+
+  if (score >= 9) {
+    performance = "Excellent";
+    suggestion = "Fantastic job! Your reading is very clear and accurate.";
+    feedback = "Outstanding reading! You pronounced the technical terms perfectly and maintained a great pace.";
+  } else if (score >= 7) {
+    performance = "Good";
+    suggestion = "Good pronunciation. Pay a bit more attention to pacing.";
+    feedback = "Great effort! Most words were read correctly with smooth flow.";
+  } else if (score >= 5) {
+    performance = "Average";
+    suggestion = "Try to avoid pauses and read with more confidence.";
+    feedback = "Fair reading. Work on reducing hesitations between sentences.";
+  }
+
+  return {
+    overall_score: score,
+    accuracy,
+    pronunciation,
+    clarity,
+    fluency,
+    confidence,
+    speaking_pace,
+    pitch,
+    performance,
+    missed_words,
+    feedback,
+    suggestion
+  };
 }
 
 // ── POST /evaluate-answer – Score how well the user read the answer aloud ──
 router.post("/evaluate-answer", requireAuth, async (req, res) => {
   try {
     const { question, userAnswer, idealAnswer, role, category } = req.body;
-    if (!question || !userAnswer || !idealAnswer) {
-      return res.status(400).json({ error: "question, userAnswer, and idealAnswer are required" });
+    if (!question || !idealAnswer) {
+      return res.status(400).json({ error: "question and idealAnswer are required" });
     }
 
-    const prompt = `You are a reading practice coach for technical interview preparation.
+    const cleanUserAnswer = String(userAnswer || "").trim();
 
-The candidate was shown a written answer on screen and asked to READ IT ALOUD. Compare what they actually said to the original text.
+    // If user said nothing or very little, return poor score immediately
+    if (!cleanUserAnswer) {
+      return res.json(simulateEvaluation("", idealAnswer));
+    }
 
-ORIGINAL TEXT (what was on screen): "${idealAnswer}"
+    // Check if Gemini API is configured
+    const aiAvailable = getGenAI() !== null;
+    if (!aiAvailable) {
+      return res.json(simulateEvaluation(cleanUserAnswer, idealAnswer));
+    }
 
-WHAT THE CANDIDATE SAID (captured via speech recognition): "${userAnswer}"
+    const prompt = `You are a speech evaluation coach.
+The candidate was asked to read the following ideal answer aloud:
+"${idealAnswer}"
 
-Evaluate their reading quality:
+What they actually said (captured via STT):
+"${cleanUserAnswer}"
 
-1. accuracy: How closely did their spoken words match the original text? Look at word-for-word accuracy — did they skip words, add words, or mispronounce technical terms?
-2. fluency: Did they read smoothly and confidently, or were there stumbles, hesitations, and restarts?
-3. completeness: Did they read the full answer or only part of it?
+Compare the spoken transcript against the ideal answer text. Judge how closely the spoken reading matches the ideal answer in wording, completeness, and clarity.
+
+Evaluate their reading performance based on these criteria:
+1. overall_score: 1 to 10 points. Excellent is 9-10. Good is 7-8. Average is 5-6. Needs Improvement/Beginner is 1-4.
+2. accuracy: 0 to 100 percentage.
+3. pronunciation: 0 to 100 percentage.
+4. clarity: 0 to 100 percentage.
+5. fluency: 0 to 100 percentage.
+6. confidence: 0 to 100 percentage.
+7. speaking_pace: 0 to 100 percentage.
+8. pitch: 0 to 100 percentage, representing vocal inflection and tonal variation.
+9. performance: Must be exactly one of: "Excellent", "Good", "Average", or "Needs Improvement".
+10. feedback: Overall feedback about their reading session (max 30 words).
+11. suggestion: A short suggestion for improvement (max 12 words).
+12. missed_words: Array of up to 5 main words they skipped or mispronounced.
 
 Respond with JSON only (no markdown, no code fences):
 {
-  "overall_score": <number 0-100>,
+  "overall_score": <number 1-10>,
   "accuracy": <number 0-100>,
+  "pronunciation": <number 0-100>,
+  "clarity": <number 0-100>,
   "fluency": <number 0-100>,
-  "completeness": <number 0-100>,
-  "missed_words": ["<important word or term they skipped or mispronounced>"],
-  "strengths": ["<what they did well>"],
-  "improvements": ["<specific tip to read better>"],
-  "coaching": "<one sentence of feedback>"
-}
-
-Be encouraging. The goal is to help them practice reading technical terminology fluently.`;
-
-    const raw = await generateText(prompt);
-    const cleaned = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  "confidence": <number 0-100>,
+  "speaking_pace": <number 0-100>,
+  "pitch": <number 0-100>,
+  "performance": "<performance string>",
+  "feedback": "<overall feedback string>",
+  "suggestion": "<suggestion string>",
+  "missed_words": ["<word1>", "<word2>"]
+}`;
 
     try {
+      const raw = await generateText(prompt, "gemini-2.5-flash");
+      const cleaned = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
       const parsed = JSON.parse(cleaned);
+
       return res.json({
-        overall_score: Number(parsed.overall_score) || 0,
+        overall_score: Number(parsed.overall_score) || 1,
         accuracy: Number(parsed.accuracy) || 0,
+        pronunciation: Number(parsed.pronunciation) || 0,
+        clarity: Number(parsed.clarity) || 0,
         fluency: Number(parsed.fluency) || 0,
-        completeness: Number(parsed.completeness) || 0,
+        confidence: Number(parsed.confidence) || 0,
+        speaking_pace: Number(parsed.speaking_pace) || 0,
+        pitch: Number(parsed.pitch) || 0,
+        performance: String(parsed.performance || "Average"),
+        feedback: String(parsed.feedback || ""),
+        suggestion: String(parsed.suggestion || ""),
         missed_words: Array.isArray(parsed.missed_words) ? parsed.missed_words.map(String) : [],
-        strengths: Array.isArray(parsed.strengths) ? parsed.strengths.map(String) : [],
-        improvements: Array.isArray(parsed.improvements) ? parsed.improvements.map(String) : [],
-        coaching: String(parsed.coaching || ""),
       });
     } catch {
-      return res.json({
-        overall_score: 0, accuracy: 0, fluency: 0, completeness: 0,
-        missed_words: [],
-        strengths: [], improvements: ["Could not parse evaluation result."], coaching: "",
-      });
+      return res.json(simulateEvaluation(cleanUserAnswer, idealAnswer));
     }
   } catch (e) {
     console.error("AI evaluate-answer error:", e);

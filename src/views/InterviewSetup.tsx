@@ -51,7 +51,7 @@ export default function InterviewSetup({ uploadedInterviewRaw, currentUser, onCo
       state: {
         sessionQuestions: ten,
         selectedRole: role,
-        candidateName: candidateName.trim(),
+        candidateName: candidateName.trim() || 'Candidate',
       },
     });
   };
@@ -121,6 +121,7 @@ export default function InterviewSetup({ uploadedInterviewRaw, currentUser, onCo
             <input
               id="candidate-name"
               type="text"
+              autoComplete="off"
               value={candidateName}
               onChange={(e) => setCandidateName(e.target.value)}
               placeholder="Candidate"

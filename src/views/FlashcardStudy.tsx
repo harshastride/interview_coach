@@ -77,9 +77,10 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
   const canUpload = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
   // Get selected categories and level from route state
-  const routeState = (location.state as { selectedCategories?: string[]; selectedLevel?: number | null }) ?? {};
+  const routeState = (location.state as { selectedCategories?: string[]; selectedLevel?: number | null; searchQuery?: string }) ?? {};
   const selectedCategories = routeState.selectedCategories ?? [];
   const selectedLevel = routeState.selectedLevel ?? null;
+  const searchQuery = routeState.searchQuery ?? '';
 
   const activeSection = homeChoice === 'flashcards' ? 'flashcards' as const : 'quiz' as const;
   const bottomNavProps = useBottomNav(activeSection);
@@ -112,8 +113,16 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
     if (selectedLevel !== null) {
       filtered = filtered.filter((t) => t.level === selectedLevel);
     }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter((t) => 
+        t.term.toLowerCase().includes(q) || 
+        t.definition.toLowerCase().includes(q) ||
+        t.category.toLowerCase().includes(q)
+      );
+    }
     return filtered;
-  }, [mergedTermsSource, selectedCategories, selectedLevel]);
+  }, [mergedTermsSource, selectedCategories, selectedLevel, searchQuery]);
 
   // State
   const [terms, setTerms] = useState<Flashcard[]>([]);
@@ -252,28 +261,7 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
     }
   }, [currentIndex, mode, terms, currentCard, reviewMode]);
 
-  // Progress reporting
-  useEffect(() => {
-    if (!currentUser) return;
-    const payload = {
-      module: homeChoice ?? 'home',
-      total_terms: terms.length,
-      completed_terms: completedTermIds.size,
-      quiz_correct: score.correct,
-      quiz_incorrect: score.incorrect,
-      interview_total: 0,
-      interview_answered: 0,
-    };
-    const timer = setTimeout(() => {
-      fetch('/api/progress', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        body: JSON.stringify(payload),
-      }).catch(() => {});
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [currentUser, terms.length, completedTermIds.size, score.correct, score.incorrect]);
+  // (Old Progress reporting logic removed — we now use useStreaks recordActivity)
 
   /* ---------------------------------------------------------------- */
   /*  Navigation helpers                                               */
@@ -320,7 +308,12 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
       // Good or Easy — mark correct
       setScore((prev) => ({ ...prev, correct: prev.correct + 1 }));
       if (currentCard.id) {
-        setCompletedTermIds((prev) => new Set(prev).add(currentCard.id));
+        setCompletedTermIds((prev) => {
+          if (!prev.has(currentCard.id)) {
+            recordActivity(1, 0, 0);
+          }
+          return new Set(prev).add(currentCard.id);
+        });
       }
     } else {
       // Again or Hard — mark incorrect
@@ -342,6 +335,11 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
     } else {
       setScore((prev) => ({ ...prev, incorrect: prev.incorrect + 1 }));
       setWrongAnswers((prev) => prev.includes(currentCard.id) ? prev : [...prev, currentCard.id]);
+    }
+
+    if (!completedTermIds.has(currentCard.id)) {
+      setCompletedTermIds((prev) => new Set(prev).add(currentCard.id));
+      recordActivity(0, 1, 0);
     }
 
     // Also submit review: correct = rating 3, incorrect = rating 1
