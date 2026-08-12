@@ -61,7 +61,10 @@ const GROUP_DEFS: GroupDef[] = [
     label: 'Java',
     icon: '☕',
     gradient: 'from-amber-500 to-red-500',
-    match: (c) => /^(java|spring|microservice|kafka|database|redis|angular|react|aws|docker|kubernetes|ci\/cd)/i.test(c),
+    match: (c) => {
+      if (c.toLowerCase().includes('data engineering')) return false;
+      return /^(java|spring|microservice|kafka|database \/ sql|redis|angular|react|aws|docker|kubernetes|ci\/cd & devops)/i.test(c);
+    },
   },
   {
     key: 'engineering',
