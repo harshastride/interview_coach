@@ -79,7 +79,7 @@ async function startServer() {
       cookie: {
         maxAge: 7 * 24 * 60 * 60 * 1000,
         httpOnly: true,
-        secure: process.env.APP_URL?.startsWith("https") === true,
+        secure: false,
         sameSite: "lax",
       },
     })
