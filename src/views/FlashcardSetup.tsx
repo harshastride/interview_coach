@@ -320,7 +320,7 @@ export default function FlashcardSetup({ uploadedTermsRaw, currentUser, onConten
                         </span>
                       </button>
                     );
-                  })}
+                  }))}
                 </div>
               </section>
             );
