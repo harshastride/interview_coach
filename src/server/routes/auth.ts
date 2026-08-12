@@ -103,6 +103,65 @@ router.get(
 // ── API auth routes (mounted at /api/auth) ─────────────────────────────
 export const apiAuthRouter = express.Router();
 
+apiAuthRouter.post("/login-email", async (req, res) => {
+  const { email } = req.body;
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ error: "Email is required" });
+  }
+  const cleanEmail = email.trim().toLowerCase();
+
+  try {
+    const [userRes, countRes, allowRes] = await Promise.all([
+      pgPool.query("SELECT * FROM users WHERE LOWER(email) = $1", [cleanEmail]),
+      pgPool.query("SELECT COUNT(*) as c FROM users"),
+      pgPool.query("SELECT 1 FROM email_allowlist WHERE LOWER(email) = $1", [cleanEmail]),
+    ]);
+
+    let user = userRes.rows[0] as DbUser | undefined;
+    const count = parseInt(String((countRes.rows[0] as any).c), 10);
+    const onAllowlist = !!allowRes.rows[0];
+
+    if (!user) {
+      const role = count === 0 ? "admin" : "viewer";
+      const isAllowed = count === 0 ? 1 : onAllowlist ? 1 : 0;
+      const name = cleanEmail.split('@')[0];
+      const googleId = `email_${Date.now()}`;
+
+      const insertRes = await pgPool.query(
+        `INSERT INTO users (google_id, email, name, avatar_url, role, is_allowed, last_login)
+         VALUES ($1, $2, $3, NULL, $4, $5, NOW()) RETURNING *`,
+        [googleId, cleanEmail, name, role, isAllowed]
+      );
+      user = insertRes.rows[0] as DbUser;
+    } else {
+      const isAllowed = user.is_allowed ? 1 : onAllowlist ? 1 : 0;
+      const updateRes = await pgPool.query(
+        `UPDATE users SET last_login = NOW(), is_allowed = $1 WHERE id = $2 RETURNING *`,
+        [isAllowed, user.id]
+      );
+      user = updateRes.rows[0] as DbUser;
+    }
+
+    req.login(user, (err) => {
+      if (err) return res.status(500).json({ error: "Session login failed" });
+      return res.json({
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          avatar_url: user.avatar_url,
+          role: user.role,
+          isAllowed: !!user.is_allowed,
+        }
+      });
+    });
+  } catch (err) {
+    console.error("Direct email login error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 apiAuthRouter.get("/me", async (req, res) => {
   if (!req.isAuthenticated?.()) {
     return res.json({ authenticated: false });
