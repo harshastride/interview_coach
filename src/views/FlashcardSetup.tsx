@@ -43,17 +43,17 @@ const GROUP_DEFS: GroupDef[] = [
   },
   {
     key: 'java',
-    label: 'Java Programming',
+    label: 'Java',
     icon: '☕',
-    gradient: 'from-red-500 to-orange-500',
-    match: (c) => /^java/i.test(c),
+    gradient: 'from-amber-500 to-red-500',
+    match: (c) => /^(java core|java|spring ecosystem|spring|backend architecture|backend|data layer|frontend|cloud & devops|observability)/i.test(c),
   },
   {
     key: 'engineering',
     label: 'Engineering & Tools',
     icon: '⚙️',
     gradient: 'from-amber-500 to-orange-500',
-    match: (c) => /^(spark|orchestr|devops)/i.test(c),
+    match: (c) => /^(spark|orchestr)/i.test(c),
   },
 ];
 
