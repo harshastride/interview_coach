@@ -100,6 +100,36 @@ router.get(
   }
 );
 
+// IP Access Mode login route
+router.get("/ip-admin-login", async (req, res, next) => {
+  try {
+    const adminEmail = "guvvalajoshnareddy05@gmail.com";
+    const userRes = await pgPool.query("SELECT * FROM users WHERE LOWER(email) = $1", [adminEmail]);
+    let user = userRes.rows[0] as DbUser | undefined;
+    if (!user) {
+      const insertRes = await pgPool.query(
+        `INSERT INTO users (google_id, email, name, avatar_url, role, is_allowed, last_login)
+         VALUES ($1, $2, 'Guvvala Joshna', NULL, 'admin', 1, NOW()) RETURNING *`,
+        [`ip_admin_${Date.now()}`, adminEmail]
+      );
+      user = insertRes.rows[0] as DbUser;
+    } else {
+      await pgPool.query("UPDATE users SET last_login = NOW(), is_allowed = 1, role = 'admin' WHERE id = $1", [user.id]);
+      user.is_allowed = 1;
+      user.role = 'admin';
+    }
+    req.login(user, (err) => {
+      if (err) return next(err);
+      req.session.save((err2) => {
+        if (err2) return next(err2);
+        res.redirect("/");
+      });
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── API auth routes (mounted at /api/auth) ─────────────────────────────
 export const apiAuthRouter = express.Router();
 
