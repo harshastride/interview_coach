@@ -17,6 +17,16 @@ interface FlashcardSetupProps {
   homeChoice?: HomeChoice;
 }
 
+const DEFAULT_JAVA_TOPICS = [
+  'Java Core',
+  'Spring Ecosystem',
+  'Backend Architecture',
+  'Data Layer',
+  'Frontend',
+  'Cloud & DevOps',
+  'Observability',
+];
+
 /* ── Smart grouping config ────────────────────────────── */
 interface GroupDef {
   key: string;
@@ -46,7 +56,7 @@ const GROUP_DEFS: GroupDef[] = [
     label: 'Java',
     icon: '☕',
     gradient: 'from-amber-500 to-red-500',
-    match: (c) => /^(java core|java|spring ecosystem|spring|backend architecture|backend|data layer|frontend|cloud & devops|observability)/i.test(c),
+    match: (c) => /^(java|spring|backend|data layer|frontend|cloud|observability)/i.test(c),
   },
   {
     key: 'engineering',
@@ -64,8 +74,7 @@ function autoGroup(categories: string[]): { def: GroupDef; categories: string[] 
   for (const def of GROUP_DEFS) {
     const matched = categories.filter((c) => def.match(c) && !placed.has(c));
     matched.forEach((c) => placed.add(c));
-    // Show header bar for configured groups (e.g. Java, Azure, Data)
-    if (matched.length > 0 || def.key === 'java') {
+    if (matched.length > 0) {
       groups.push({ def, categories: matched });
     }
   }
@@ -102,7 +111,10 @@ export default function FlashcardSetup({ uploadedTermsRaw, currentUser, onConten
     return counts;
   }, [uploadedTermsRaw]);
 
-  const allCategories = useMemo(() => Object.keys(countsByCategory).sort(), [countsByCategory]);
+  const allCategories = useMemo(() => {
+    const set = new Set([...Object.keys(countsByCategory), ...DEFAULT_JAVA_TOPICS]);
+    return Array.from(set).sort();
+  }, [countsByCategory]);
 
   const groups = useMemo(() => autoGroup(allCategories), [allCategories]);
 
@@ -278,12 +290,7 @@ export default function FlashcardSetup({ uploadedTermsRaw, currentUser, onConten
 
                 {/* Individual topic cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 pl-2">
-                  {filtered.length === 0 ? (
-                    <div className="col-span-full p-4 rounded-xl bg-[var(--stint-bg-elevated)]/50 border border-dashed border-[var(--stint-border)] text-xs text-[var(--stint-text-muted)] text-center">
-                      Ready for Java topics: <span className="font-medium text-[var(--stint-text)]">Java Core, Spring Ecosystem, Backend Architecture, Data Layer, Frontend, Cloud & DevOps, Observability</span> (Upload CSV in Admin Panel)
-                    </div>
-                  ) : (
-                    filtered.map((cat) => {
+                  {filtered.map((cat) => {
                     const isSelected = selectedCategories.includes(cat);
                     const count = countsByCategory[cat] || 0;
                     return (
@@ -320,7 +327,7 @@ export default function FlashcardSetup({ uploadedTermsRaw, currentUser, onConten
                         </span>
                       </button>
                     );
-                  }))}
+                  })}
                 </div>
               </section>
             );
