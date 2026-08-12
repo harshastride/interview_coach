@@ -42,9 +42,16 @@ const GROUP_DEFS: GroupDef[] = [
     match: (c) => /^(data |microsoft |advanced)/i.test(c),
   },
   {
+    key: 'java',
+    label: 'Java Programming',
+    icon: '☕',
+    gradient: 'from-red-500 to-orange-500',
+    match: (c) => /^java/i.test(c),
+  },
+  {
     key: 'engineering',
     label: 'Engineering & Tools',
-    icon: '\u2699\uFE0F',
+    icon: '⚙️',
     gradient: 'from-amber-500 to-orange-500',
     match: (c) => /^(spark|orchestr|devops)/i.test(c),
   },
