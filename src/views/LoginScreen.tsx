@@ -1,34 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import Logo from '../components/Logo';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/auth/login-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Login failed');
-      }
-      window.location.href = '/';
-    } catch (err: any) {
-      setError(err.message || 'Login failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[var(--stint-bg)] via-[var(--stint-bg)] to-[var(--stint-primary)]/5 p-4 relative overflow-hidden">
       {/* Decorative background circles */}
@@ -45,7 +18,7 @@ export default function LoginScreen() {
         <h1 className="font-serif text-xl font-bold text-[var(--stint-text)] mb-1 text-center">
           Master Data Engineering
         </h1>
-        <p className="text-sm text-[var(--stint-text-muted)] mb-6 text-center">
+        <p className="text-sm text-[var(--stint-text-muted)] mb-8 text-center">
           Azure · Snowflake · dbt interview prep
         </p>
 
@@ -57,33 +30,6 @@ export default function LoginScreen() {
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#fff" opacity=".8"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#fff" opacity=".9"/></svg>
           Continue with Google
         </a>
-
-        {/* Divider */}
-        <div className="w-full flex items-center gap-3 my-4">
-          <div className="flex-1 h-px bg-[var(--stint-border)]" />
-          <span className="text-xs text-[var(--stint-text-muted)] uppercase tracking-wider font-semibold">Or</span>
-          <div className="flex-1 h-px bg-[var(--stint-border)]" />
-        </div>
-
-        {/* Direct Email Sign In */}
-        <form onSubmit={handleEmailLogin} className="w-full space-y-3">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter your email..."
-            required
-            className="w-full px-3.5 py-2.5 rounded-xl bg-[var(--stint-bg-elevated)] border border-[var(--stint-border)] text-sm text-[var(--stint-text)] placeholder:text-[var(--stint-text-muted)] focus:outline-none focus:border-[var(--stint-primary)]"
-          />
-          {error && <p className="text-xs text-red-500 text-center">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2.5 px-4 rounded-xl bg-[var(--stint-bg-elevated)] border border-[var(--stint-border)] text-[var(--stint-text)] font-semibold hover:border-[var(--stint-primary)] transition-all text-sm disabled:opacity-50"
-          >
-            {loading ? 'Signing in...' : 'Sign in with Email'}
-          </button>
-        </form>
       </div>
 
       {/* Footer */}
