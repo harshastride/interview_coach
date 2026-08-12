@@ -3,6 +3,20 @@
  * Used by constants.ts to build full Flashcard[] with generated id, example, quizTip.
  */
 export const TERM_ENTRIES: { t: string; d: string; l: number; c: string }[] = [
+  // Java Fundamentals (Level 2)
+  { t: "JVM", d: "Java Virtual Machine; abstract computing machine that enables a computer to run a Java program.", l: 2, c: "Java Fundamentals" },
+  { t: "JDK", d: "Java Development Kit; software development environment used for developing Java applications.", l: 2, c: "Java Fundamentals" },
+  { t: "JRE", d: "Java Runtime Environment; bundle containing JVM and core libraries required to run Java bytecode.", l: 2, c: "Java Fundamentals" },
+  { t: "Garbage Collection", d: "Automatic memory management process in Java that frees memory occupied by unreferenced objects.", l: 2, c: "Java Fundamentals" },
+  { t: "OOP (Object-Oriented Programming)", d: "Programming paradigm based on the concept of objects containing data and code.", l: 2, c: "Java Fundamentals" },
+  { t: "Inheritance", d: "Mechanism where one class acquires the properties and behaviors of a parent class using 'extends'.", l: 2, c: "Java Fundamentals" },
+  { t: "Polymorphism", d: "Ability of an object to take on many forms (Method Overloading & Method Overriding).", l: 2, c: "Java Fundamentals" },
+  { t: "Encapsulation", d: "Wrapping data (variables) and code acting on data (methods) together as a single unit.", l: 2, c: "Java Fundamentals" },
+  { t: "Abstraction", d: "Hiding internal implementation details and showing only essential functionality to the user.", l: 2, c: "Java Fundamentals" },
+  { t: "HashMap", d: "Hash table based implementation of Map interface storing key-value pairs.", l: 3, c: "Java Advanced" },
+  { t: "ArrayList", d: "Resizable array implementation of List interface offering fast positional access.", l: 2, c: "Java Fundamentals" },
+  { t: "Multithreading", d: "Concurrent execution of two or more threads to maximize CPU utilization.", l: 3, c: "Java Advanced" },
+  { t: "Spring Boot", d: "Open-source Java-based framework used to create microservices and stand-alone applications.", l: 3, c: "Java Advanced" },
   // Cloud & Internet Basics (Level 2)
   { t: "Cloud", d: "A metaphor for the internet or remote servers that provide on-demand computing resources.", l: 2, c: "Cloud & Internet Basics" },
   { t: "Cloud Computing", d: "Delivery of computing services over the internet (servers, storage, databases, analytics).", l: 2, c: "Cloud & Internet Basics" },
