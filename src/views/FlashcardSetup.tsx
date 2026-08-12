@@ -64,7 +64,10 @@ function autoGroup(categories: string[]): { def: GroupDef; categories: string[] 
   for (const def of GROUP_DEFS) {
     const matched = categories.filter((c) => def.match(c) && !placed.has(c));
     matched.forEach((c) => placed.add(c));
-    if (matched.length > 0) groups.push({ def, categories: matched });
+    // Show header bar for configured groups (e.g. Java, Azure, Data)
+    if (matched.length > 0 || def.key === 'java') {
+      groups.push({ def, categories: matched });
+    }
   }
 
   const remaining = categories.filter((c) => !placed.has(c));
@@ -225,10 +228,10 @@ export default function FlashcardSetup({ uploadedTermsRaw, currentUser, onConten
           {/* ── Topic groups ──────────────────────────────── */}
           {groups.map(({ def, categories }) => {
             const filtered = categories.filter(matchesSearch);
-            if (filtered.length === 0) return null;
+            if (filtered.length === 0 && (searchQuery.trim() !== '' || def.key !== 'java')) return null;
 
             const selectedInGroup = filtered.filter((c) => selectedCategories.includes(c)).length;
-            const allGroupSelected = selectedInGroup === filtered.length;
+            const allGroupSelected = filtered.length > 0 && selectedInGroup === filtered.length;
             const groupCardCount = filtered.reduce((s, c) => s + (countsByCategory[c] || 0), 0);
 
             return (
@@ -275,7 +278,12 @@ export default function FlashcardSetup({ uploadedTermsRaw, currentUser, onConten
 
                 {/* Individual topic cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 pl-2">
-                  {filtered.map((cat) => {
+                  {filtered.length === 0 ? (
+                    <div className="col-span-full p-4 rounded-xl bg-[var(--stint-bg-elevated)]/50 border border-dashed border-[var(--stint-border)] text-xs text-[var(--stint-text-muted)] text-center">
+                      Ready for Java topics: <span className="font-medium text-[var(--stint-text)]">Java Core, Spring Ecosystem, Backend Architecture, Data Layer, Frontend, Cloud & DevOps, Observability</span> (Upload CSV in Admin Panel)
+                    </div>
+                  ) : (
+                    filtered.map((cat) => {
                     const isSelected = selectedCategories.includes(cat);
                     const count = countsByCategory[cat] || 0;
                     return (
