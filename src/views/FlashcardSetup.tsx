@@ -22,7 +22,7 @@ const DEFAULT_JAVA_TOPICS = [
   'Spring Boot',
   'Microservices',
   'Kafka',
-  'Database',
+  'Database / SQL',
   'Redis / Caching',
   'Angular',
   'React',
