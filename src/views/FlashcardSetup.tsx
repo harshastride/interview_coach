@@ -18,13 +18,18 @@ interface FlashcardSetupProps {
 }
 
 const DEFAULT_JAVA_TOPICS = [
-  'Java Core',
-  'Spring Ecosystem',
-  'Backend Architecture',
-  'Data Layer',
-  'Frontend',
-  'Cloud & DevOps',
-  'Observability',
+  'Java',
+  'Spring Boot',
+  'Microservices',
+  'Kafka',
+  'Database',
+  'Redis / Caching',
+  'Angular',
+  'React',
+  'AWS',
+  'Docker',
+  'Kubernetes',
+  'CI/CD & DevOps',
 ];
 
 /* ── Smart grouping config ────────────────────────────── */
@@ -40,14 +45,14 @@ const GROUP_DEFS: GroupDef[] = [
   {
     key: 'azure',
     label: 'Azure Services',
-    icon: '\u2601\uFE0F',
+    icon: '☁️',
     gradient: 'from-blue-500 to-cyan-500',
     match: (c) => c.toLowerCase().startsWith('azure'),
   },
   {
     key: 'data',
     label: 'Data & Analytics',
-    icon: '\uD83D\uDCCA',
+    icon: '📊',
     gradient: 'from-violet-500 to-purple-500',
     match: (c) => /^(data |microsoft |advanced)/i.test(c),
   },
@@ -56,7 +61,7 @@ const GROUP_DEFS: GroupDef[] = [
     label: 'Java',
     icon: '☕',
     gradient: 'from-amber-500 to-red-500',
-    match: (c) => /^(java|spring|backend|data layer|frontend|cloud|observability)/i.test(c),
+    match: (c) => /^(java|spring|microservice|kafka|database|redis|angular|react|aws|docker|kubernetes|ci\/cd)/i.test(c),
   },
   {
     key: 'engineering',
