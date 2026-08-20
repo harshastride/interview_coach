@@ -37,11 +37,12 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           if (!user) {
             const role = count === 0 ? "admin" : "viewer";
             const isAllowed = count === 0 ? 1 : onAllowlist ? 1 : 0;
-            // INSERT RETURNING — no need for a separate SELECT
+            const username = (email.split('@')[0] || name || "user").toLowerCase() + "_" + Date.now();
+            // INSERT RETURNING — include username for DB compatibility
             const insertRes = await pgPool.query(
-              `INSERT INTO users (google_id, email, name, avatar_url, role, is_allowed, last_login)
-               VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *`,
-              [googleId, email, name, avatarUrl, role, isAllowed]
+              `INSERT INTO users (google_id, email, name, username, avatar_url, role, is_allowed, last_login)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING *`,
+              [googleId, email, name, username, avatarUrl, role, isAllowed]
             );
             user = insertRes.rows[0] as DbUser;
           } else {
