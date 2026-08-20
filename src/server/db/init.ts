@@ -7,15 +7,20 @@ export async function initPg() {
 
   const client = await pgPool.connect();
   try {
-    // Quick check — if users table exists, skip full init (already done)
-    const check = await client.query(`
-      SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users' LIMIT 1
-    `);
-    if (check.rows.length > 0) {
-      return; // Tables already exist, skip init
-    }
+    // Ensure all required columns exist on users table
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS id SERIAL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'viewer';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_allowed INTEGER DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ DEFAULT NOW();
+      ALTER TABLE users ADD CONSTRAINT users_id_unique UNIQUE(id);
+    `).catch(() => {});
 
-    // First-time setup: create all tables
+    // Create all required tables
     await client.query(`
       CREATE TABLE IF NOT EXISTS tts_cache (
         term TEXT PRIMARY KEY,
