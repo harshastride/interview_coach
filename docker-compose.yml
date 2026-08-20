@@ -1,11 +1,12 @@
 services:
   app:
+    container_name: interview_ibc
     build:
       context: .
       args:
         GEMINI_API_KEY: ${GEMINI_API_KEY}
     ports:
-      - "8000:3000"
+      - "8002:3000"
     environment:
       - NODE_ENV=production
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -14,4 +15,8 @@ services:
       - SESSION_SECRET=${SESSION_SECRET}
       - APP_URL=${APP_URL}
       - DATABASE_URL=${DATABASE_URL}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_BUCKET=${SUPABASE_BUCKET}
+      - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}
+      - SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY}
     restart: unless-stopped
