@@ -17,6 +17,10 @@ export async function initPg() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'viewer';
       ALTER TABLE users ADD COLUMN IF NOT EXISTS is_allowed INTEGER DEFAULT 0;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ DEFAULT NOW();
+      ALTER TABLE users ALTER COLUMN created_at SET DEFAULT NOW();
+      ALTER TABLE users ALTER COLUMN created_at DROP NOT NULL;
+      ALTER TABLE users ALTER COLUMN updated_at SET DEFAULT NOW();
+      ALTER TABLE users ALTER COLUMN updated_at DROP NOT NULL;
       ALTER TABLE users ADD CONSTRAINT users_id_unique UNIQUE(id);
     `).catch(() => {});
 
