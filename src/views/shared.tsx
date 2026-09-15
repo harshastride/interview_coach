@@ -65,6 +65,7 @@ export interface HeaderRightSlotProps {
 }
 
 export function HeaderRightSlot({ currentUser, canUpload, onLogout, onOpenAdmin }: HeaderRightSlotProps) {
+  const staffNavigate=useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { isDark, toggleDark } = useDarkMode();
 
@@ -111,10 +112,10 @@ export function HeaderRightSlot({ currentUser, canUpload, onLogout, onOpenAdmin 
                 type="button"
                 role="menuitem"
                 className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[var(--stint-text)] hover:bg-[var(--stint-bg)] transition-colors"
-                onClick={() => { setShowUserMenu(false); onOpenAdmin(); }}
+                onClick={() => { setShowUserMenu(false); staffNavigate('/staff/overview'); }}
               >
                 <Settings size={16} className="text-[var(--stint-text-muted)]" />
-                Admin Panel
+                Staff workspace
               </button>
             )}
             <button

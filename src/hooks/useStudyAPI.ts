@@ -70,7 +70,7 @@ export function useStreaks() {
     try {
       await fetchJson('/api/study/activity', {
         method: 'POST',
-        body: JSON.stringify({ cards_studied: cards, quiz_answered: quiz, time_spent_sec: timeSec }),
+        body: JSON.stringify({ cards_studied: cards, quiz_answered: quiz, time_spent_sec: timeSec, submissionId:crypto.randomUUID() }),
       });
       fetchStreaks();
     } catch { /* ignore */ }

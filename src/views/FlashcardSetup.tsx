@@ -11,7 +11,7 @@ import { HeaderRightSlot, useBottomNav } from './shared';
 export type HomeChoice = 'flashcards' | 'quiz';
 
 interface FlashcardSetupProps {
-  uploadedTermsRaw: { t: string; d: string; l: number; c: string }[];
+  uploadedTermsRaw: { id?: number; t: string; d: string; l: number; c: string }[];
   currentUser: AuthUser | null;
   onContentRefresh: () => void;
   homeChoice?: HomeChoice;

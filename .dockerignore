@@ -1,6 +1,4 @@
 node_modules
 .env
-audio_cache
-tts_cache.db
+.env.local
 dist
-*.db

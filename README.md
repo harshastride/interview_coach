@@ -6,6 +6,8 @@
 
 This contains everything you need to run your app locally.
 
+**AI agents:** Read [AGENTS.md](AGENTS.md) before working on this project for the application overview, code map, development commands, and maintenance instructions.
+
 View your app in AI Studio: https://ai.studio/apps/bcfc8b63-f27b-4870-99a6-1fabb3724b6c
 
 ## Stack
@@ -48,3 +50,11 @@ App: http://localhost:8000
 
 - Set `GEMINI_API_KEY`, `DATABASE_URL`, `SESSION_SECRET`, and (for OAuth) `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `APP_URL` in your deployment environment.
 - `DATABASE_URL` should point to Supabase Postgres, not a local Docker database.
+
+## Optional Azure reading assessment
+
+See [Azure setup and scoring](docs/azure-reading.md) for Indian English pronunciation checkpoints, local practice feedback, and the monthly allowance. Leave the provider flag unset until credentials and the local analysis service are configured.
+
+## Domains and staff workspace
+
+Admins and editors can open [Staff workspace](http://localhost:3000/staff/overview) to review requests, coach candidates and classify content. Follow [domain rollout instructions](docs/domain-access.md) before enabling restrictions.

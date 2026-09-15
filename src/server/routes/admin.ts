@@ -1,3 +1,4 @@
+import { safeRouter } from '../safeRouter.ts';
 import express from "express";
 import { pgPool } from "../db/pool.ts";
 import {
@@ -8,7 +9,7 @@ import {
 } from "../middleware/auth.ts";
 import { invalidateContentCache } from "./content.ts";
 
-const router = express.Router();
+const router = safeRouter();
 
 // Invalidate content cache after any admin write operation
 router.use((req, _res, next) => {
@@ -42,11 +43,11 @@ router.patch("/users/:id", requireAdmin, async (req, res) => {
     if (!["admin", "manager", "viewer"].includes(role)) {
       return res.status(400).json({ error: "Invalid role" });
     }
-    await pgPool.query("UPDATE users SET role = $1 WHERE id = $2", [role, id]);
+    await pgPool.query("UPDATE users SET role = $1, access_version=access_version+1 WHERE id = $2", [role, id]);
     await audit((req.user as DbUser).id, "change_role", String(id), { role });
   }
   if (is_allowed !== undefined) {
-    await pgPool.query("UPDATE users SET is_allowed = $1 WHERE id = $2", [
+    await pgPool.query("UPDATE users SET is_allowed = $1, access_version=access_version+1, approved_at=CASE WHEN $1=1 THEN COALESCE(approved_at,NOW()) ELSE approved_at END WHERE id = $2", [
       is_allowed ? 1 : 0,
       id,
     ]);
@@ -64,7 +65,7 @@ router.delete("/users/:id", requireAdmin, async (req, res) => {
   if (id === (req.user as DbUser).id) {
     return res.status(400).json({ error: "Cannot remove your own account" });
   }
-  await pgPool.query("UPDATE users SET is_allowed = 0 WHERE id = $1", [id]);
+  await pgPool.query("UPDATE users SET is_allowed = 0, access_version=access_version+1 WHERE id = $1", [id]);
   await audit((req.user as DbUser).id, "revoke_access", String(id));
   res.json({ ok: true });
 });
@@ -88,7 +89,7 @@ router.post("/allowlist", requireAdmin, async (req, res) => {
      ON CONFLICT (email) DO UPDATE SET added_by = $2, added_at = NOW()`,
     [e, (req.user as DbUser).id]
   );
-  await pgPool.query("UPDATE users SET is_allowed = 1 WHERE email = $1", [e]);
+  await pgPool.query("UPDATE users SET is_allowed = 1, access_version=access_version+1, approved_at=COALESCE(approved_at,NOW()) WHERE email = $1", [e]);
   await audit((req.user as DbUser).id, "allowlist_add", e);
   res.json({ ok: true });
 });
@@ -96,58 +97,12 @@ router.post("/allowlist", requireAdmin, async (req, res) => {
 router.delete("/allowlist/:email", requireAdmin, async (req, res) => {
   const email = decodeURIComponent(req.params.email);
   await pgPool.query("DELETE FROM email_allowlist WHERE email = $1", [email]);
-  await pgPool.query("UPDATE users SET is_allowed = 0 WHERE email = $1", [email]);
+  await pgPool.query("UPDATE users SET is_allowed = 0, access_version=access_version+1 WHERE email = $1", [email]);
   await audit((req.user as DbUser).id, "allowlist_remove", email);
   res.json({ ok: true });
 });
 
-// ── Access requests ────────────────────────────────────────────────────
-router.get("/requests", requireAdmin, async (_req, res) => {
-  const result = await pgPool.query(
-    "SELECT * FROM access_requests WHERE status = 'pending' ORDER BY requested_at"
-  );
-  res.json(result.rows);
-});
-
-router.post("/requests/:id/approve", requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  const rowRes = await pgPool.query(
-    "SELECT * FROM access_requests WHERE id = $1 AND status = 'pending'",
-    [id]
-  );
-  const row = rowRes.rows[0] as { id: number; email: string } | undefined;
-  if (!row) {
-    return res.status(404).json({ error: "Request not found" });
-  }
-  await pgPool.query(
-    `INSERT INTO email_allowlist (email, added_by, added_at) VALUES ($1, $2, NOW())
-     ON CONFLICT (email) DO UPDATE SET added_by = $2, added_at = NOW()`,
-    [row.email, (req.user as DbUser).id]
-  );
-  await pgPool.query("UPDATE users SET is_allowed = 1 WHERE email = $1", [row.email]);
-  await pgPool.query(
-    "UPDATE access_requests SET status = 'approved' WHERE id = $1",
-    [id]
-  );
-  await audit((req.user as DbUser).id, "approve_access_request", row.email);
-  res.json({ ok: true });
-});
-
-router.post("/requests/:id/reject", requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  const rowRes = await pgPool.query(
-    "SELECT * FROM access_requests WHERE id = $1 AND status = 'pending'",
-    [id]
-  );
-  const row = rowRes.rows[0] as { email: string } | undefined;
-  if (!row) return res.status(404).json({ error: "Request not found" });
-  await pgPool.query(
-    "UPDATE access_requests SET status = 'rejected' WHERE id = $1",
-    [id]
-  );
-  await audit((req.user as DbUser).id, "reject_access_request", row.email);
-  res.json({ ok: true });
-});
+router.all('/requests*',requireUploader,(_req,res)=>res.status(410).json({error:'Use the Access Requests page in the staff workspace.'}));
 
 // ── Audit log ──────────────────────────────────────────────────────────
 router.get("/audit", requireAdmin, async (_req, res) => {

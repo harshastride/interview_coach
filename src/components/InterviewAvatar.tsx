@@ -4,13 +4,14 @@ export type AvatarState = 'speaking' | 'listening' | 'thinking' | 'idle';
 
 interface InterviewAvatarProps {
   state: AvatarState;
+  compact?: boolean;
 }
 
 /**
  * Animated SVG avatar for interview practice.
  * Pure CSS animations — no JS loop, no external assets.
  */
-export default function InterviewAvatar({ state }: InterviewAvatarProps) {
+export default function InterviewAvatar({ state, compact = false }: InterviewAvatarProps) {
   return (
     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 relative overflow-hidden">
       {/* Subtle background circles */}
@@ -23,7 +24,7 @@ export default function InterviewAvatar({ state }: InterviewAvatarProps) {
       <div className={`relative transition-transform duration-700 ${state === 'thinking' ? 'avatar-thinking' : ''}`}>
         <svg
           viewBox="0 0 200 220"
-          className="w-32 h-36 sm:w-40 sm:h-44 md:w-48 md:h-52"
+          className={compact ? 'w-16 h-[72px]' : 'w-32 h-36 sm:w-40 sm:h-44 md:w-48 md:h-52'}
           xmlns="http://www.w3.org/2000/svg"
         >
           {/* Body / Shoulders */}
@@ -97,7 +98,7 @@ export default function InterviewAvatar({ state }: InterviewAvatarProps) {
         </svg>
 
         {/* State indicator label */}
-        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2">
+        <div className={compact ? 'hidden' : 'absolute -bottom-1 left-1/2 -translate-x-1/2'}>
           <span className={`
             inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold tracking-wide uppercase
             ${state === 'speaking' ? 'bg-blue-500/20 text-blue-300' : ''}

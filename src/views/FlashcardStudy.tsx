@@ -38,7 +38,7 @@ import { HeaderRightSlot, useBottomNav, uniqueId, slug, fetchJson } from './shar
 type Mode = 'flashcard' | 'quiz';
 
 interface FlashcardStudyProps {
-  uploadedTermsRaw: { t: string; d: string; l: number; c: string }[];
+  uploadedTermsRaw: { id?: number; t: string; d: string; l: number; c: string }[];
   currentUser: AuthUser | null;
   onContentRefresh: () => void;
   homeChoice?: 'flashcards' | 'quiz';
@@ -93,8 +93,8 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
   // Build terms from uploaded data
   const mergedTermsSource = useMemo<Flashcard[]>(() => {
     const seen = new Set<string>();
-    return uploadedTermsRaw.map(({ t, d, l, c }) => ({
-      id: uniqueId(`uploaded-${t}`, seen),
+    return uploadedTermsRaw.map(({ id, t, d, l, c }) => ({
+      id: id ? `term-${id}` : uniqueId(`uploaded-${t}`, seen),
       term: t,
       definition: d,
       example: `e.g. ${d.slice(0, 60)}${d.length > 60 ? '\u2026' : ''}`,

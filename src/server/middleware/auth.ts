@@ -88,7 +88,7 @@ export function csrfProtection(
   }
 
   const method = req.method.toUpperCase();
-  if (method === "POST" || method === "PATCH" || method === "DELETE") {
+  if (method === "POST" || method === "PATCH" || method === "DELETE" || method === "PUT") {
     const contentTypeHeader = req.headers["content-type"];
     const requestedWithHeader = req.headers["x-requested-with"];
     const contentType = Array.isArray(contentTypeHeader)

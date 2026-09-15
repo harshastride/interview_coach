@@ -2,6 +2,7 @@ import React from 'react';
 import { Home, ChevronLeft, BookOpen, MessageSquare, BrainCircuit } from 'lucide-react';
 import { cn } from '../lib/utils';
 import Logo from './Logo';
+import { useLocation } from 'react-router-dom';
 
 export type SectionId = 'home' | 'flashcards' | 'interview' | 'quiz';
 
@@ -125,10 +126,12 @@ export interface AppLayoutProps {
 }
 
 export function AppLayout({ children, topBar, bottomNav }: AppLayoutProps) {
+  const { pathname } = useLocation();
+  const interviewMode = pathname === '/interview/session';
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[var(--stint-bg)] text-[var(--stint-text)] font-sans md:ml-60">
+    <div className={cn('h-dvh min-w-0 flex flex-col overflow-hidden bg-[var(--stint-bg)] text-[var(--stint-text)] font-sans', !interviewMode && 'md:ml-[var(--sidebar-width)]')}>
       <GlobalTopBar {...topBar} />
-      <main className="flex-1 min-h-0 overflow-auto flex flex-col pb-20 md:pb-0">
+      <main className="flex-1 min-h-0 min-w-0 overflow-auto flex flex-col">
         {children}
       </main>
       <GlobalBottomNav {...bottomNav} />

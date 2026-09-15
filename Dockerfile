@@ -8,6 +8,7 @@ RUN npm run build
 
 # Stage 2: Production runtime
 FROM node:22-alpine AS runner
+RUN apk add --no-cache ffmpeg
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci

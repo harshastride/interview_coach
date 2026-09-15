@@ -10,6 +10,7 @@ export interface Flashcard {
 
 /** One entry in the question-answer bank (per role/company/category). Stored in DB in production. */
 export interface InterviewEntry {
+  id?: number;
   question: string;
   ideal_answer: string;
   role: string;

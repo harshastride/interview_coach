@@ -1,8 +1,9 @@
+import { safeRouter } from '../safeRouter.ts';
 import express from "express";
 import { pgPool } from "../db/pool.ts";
 import { requireAuth } from "../middleware/auth.ts";
 
-const router = express.Router();
+const router = safeRouter();
 
 router.get("/:term", requireAuth, async (req, res) => {
   try {

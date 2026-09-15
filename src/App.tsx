@@ -14,6 +14,8 @@ const flashcardStudyImport = () => import('./views/FlashcardStudy');
 const interviewSetupImport = () => import('./views/InterviewSetup');
 const interviewSessionImport = () => import('./views/InterviewSession');
 
+const StaffWorkspace=React.lazy(()=>import('./views/StaffWorkspace'));
+const ReadingPages = React.lazy(() => import('./views/ReadingPages'));
 const HomeScreen = React.lazy(homeImport);
 const LoginScreen = React.lazy(() => import('./views/LoginScreen'));
 const AccessDeniedScreen = React.lazy(() => import('./views/AccessDeniedScreen'));
@@ -47,7 +49,7 @@ export default function App() {
   useDarkMode();
 
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const [uploadedTermsRaw, setUploadedTermsRaw] = useState<{ t: string; d: string; l: number; c: string }[]>([]);
+  const [uploadedTermsRaw, setUploadedTermsRaw] = useState<{ id?: number; t: string; d: string; l: number; c: string }[]>([]);
   const [uploadedInterviewRaw, setUploadedInterviewRaw] = useState<InterviewEntry[]>([]);
 
   // Use bootstrap data (arrives with auth — no extra round trips)
@@ -113,6 +115,13 @@ export default function App() {
           )}
           {authStatus === 'authenticated' && (
             <>
+              {['admin','manager'].includes(currentUser?.role??'')&&<>
+                <Route path="/staff" element={<Navigate to="/staff/overview" replace/>}/>
+                <Route path="/staff/:section" element={<StaffWorkspace user={currentUser} onContentRefresh={refreshUploadedContent}/>}/>
+                <Route path="/staff/candidates/:candidateId" element={<StaffWorkspace user={currentUser} onContentRefresh={refreshUploadedContent}/>}/>
+                <Route path="/staff/reports/:reportId" element={<StaffWorkspace user={currentUser} onContentRefresh={refreshUploadedContent}/>}/>
+              </>}
+
               <Route
                 path="/"
                 element={
@@ -186,6 +195,10 @@ export default function App() {
                   />
                 }
               />
+              <Route path="/reading/assignments" element={<ReadingPages passages={uploadedInterviewRaw} />} />
+              <Route path="/reading/revision" element={<ReadingPages passages={uploadedInterviewRaw} />} />
+              <Route path="/reading/history" element={<ReadingPages passages={uploadedInterviewRaw} />} />
+              <Route path="/reading/reports/:attemptId" element={<ReadingPages passages={uploadedInterviewRaw} />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </>
           )}

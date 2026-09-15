@@ -1,0 +1,3 @@
+# Optional: vocal-confidence signal (ENABLE_EMOTION=1). Adds ~2 GB to the image.
+torch>=2.1
+transformers>=4.40

@@ -1,7 +1,9 @@
-import "dotenv/config";
-import dotenv from "dotenv";
-// Load .env.local so AI Studio / local dev can set GEMINI_API_KEY there
-dotenv.config({ path: ".env.local", override: true });
+import './src/server/env.ts';
+import assignmentRouter from './src/server/domain/assignments.ts';
+import { practiceGuard } from './src/server/domain/practice.ts';
+import domainRouter from './src/server/domain/router.ts';
+import analyticsRouter from './src/server/domain/analytics.ts';
+import { domainGuard, DomainError } from './src/server/domain/access.ts';
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -15,6 +17,8 @@ import compression from "compression";
 import { pgPool } from "./src/server/db/pool.ts";
 import { initPg } from "./src/server/db/init.ts";
 import { csrfProtection } from "./src/server/middleware/auth.ts";
+import { devAuth, devAuthEnabled, DEV_GOOGLE_ID } from "./src/server/middleware/devAuth.ts";
+import type { DbUser } from "./src/server/middleware/auth.ts";
 import authRouter, { apiAuthRouter } from "./src/server/routes/auth.ts";
 import contentRouter from "./src/server/routes/content.ts";
 import ttsRouter from "./src/server/routes/tts.ts";
@@ -88,11 +92,29 @@ async function startServer() {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  if (devAuthEnabled()) {
+    // Keep a real ID for progress foreign keys, but no permanent access grant.
+    const result = await pgPool.query<DbUser>(
+      `INSERT INTO users (google_id, email, name, role, is_allowed)
+       VALUES ($1, $2, $3, 'viewer', 0)
+       ON CONFLICT (google_id) DO UPDATE SET name = EXCLUDED.name
+       RETURNING *`,
+      [DEV_GOOGLE_ID, "local-developer@example.invalid", "Local Developer"]
+    );
+    app.use(devAuth(result.rows[0]));
+    console.warn("Local authentication bypass enabled: loopback requests use Local Developer (admin).");
+  }
+
   // Phase 1.5: Apply CSRF protection globally (after session/passport init)
   app.use(csrfProtection);
 
   // ── Mount routes ────────────────────────────────────────────────────
   app.use("/auth", authRouter);
+  app.use("/api", domainGuard);
+  app.use("/api", domainRouter);
+  app.use("/api", assignmentRouter);
+  app.use("/api", practiceGuard);
+  app.use("/api/staff", analyticsRouter);
   app.use("/api/auth", apiAuthRouter);
   app.use("/api/content", contentRouter);
   app.use("/api/tts", ttsRouter);
@@ -103,6 +125,7 @@ async function startServer() {
 
   // Phase 1.3: Global error handler
   app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if(err instanceof DomainError) { res.status(err.status).json({error:err.message}); return; }
     console.error("Unhandled error:", err);
     res.status(500).json({ error: "Internal server error" });
   });
@@ -121,7 +144,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, devAuthEnabled() ? "127.0.0.1" : "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }

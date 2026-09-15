@@ -1,0 +1,8 @@
+fastapi>=0.115
+uvicorn>=0.30
+pydantic>=2.7
+faster-whisper>=1.0
+numpy>=1.26
+requests>=2.32
+# praat-parselmouth is installed best-effort in the Dockerfile: it has no
+# prebuilt wheel on linux/arm64, where the numpy pitch fallback is used.

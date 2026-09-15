@@ -1,10 +1,13 @@
+import { safeRouter } from '../safeRouter.ts';
+import { content,scope,staff,wrap } from '../domain/access.ts';
 import express from "express";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { pgPool } from "../db/pool.ts";
 import type { DbUser } from "../middleware/auth.ts";
+import { DEV_GOOGLE_ID } from "../middleware/devAuth.ts";
 
-const router = express.Router();
+const router = safeRouter();
 
 // ── Passport configuration ─────────────────────────────────────────────
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -25,13 +28,14 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           // Single query: check user + count + allowlist in parallel
           const [userRes, countRes, allowRes] = await Promise.all([
             pgPool.query("SELECT * FROM users WHERE google_id = $1", [googleId]),
-            pgPool.query("SELECT COUNT(*) as c FROM users"),
+            pgPool.query("SELECT COUNT(*) as c FROM users WHERE google_id <> $1", [DEV_GOOGLE_ID]),
             pgPool.query("SELECT 1 FROM email_allowlist WHERE email = $1", [email]),
           ]);
 
           let user = userRes.rows[0] as DbUser | undefined;
           const count = parseInt(String((countRes.rows[0] as any).c), 10);
-          const onAllowlist = !!allowRes.rows[0];
+          const enforcement=(await pgPool.query("SELECT enforced FROM domain_settings WHERE id=1")).rows[0]?.enforced;
+          const onAllowlist = !!allowRes.rows[0] && !enforcement;
 
           if (!user) {
             const role = count === 0 ? "admin" : "viewer";
@@ -100,7 +104,7 @@ router.get(
 );
 
 // ── API auth routes (mounted at /api/auth) ─────────────────────────────
-export const apiAuthRouter = express.Router();
+export const apiAuthRouter = safeRouter();
 
 apiAuthRouter.get("/me", (req, res) => {
   if (!req.isAuthenticated?.()) {
@@ -121,33 +125,27 @@ apiAuthRouter.get("/me", (req, res) => {
 });
 
 // Combined bootstrap — auth + content in one round trip
-apiAuthRouter.get("/bootstrap", async (req, res) => {
+apiAuthRouter.get("/bootstrap", wrap(async (req, res) => {
   if (!req.isAuthenticated?.()) {
     return res.json({ authenticated: false });
   }
   const u = req.user as DbUser;
+  const access=await scope(u);
+  const request=(await pgPool.query("SELECT r.status,r.domain_id,d.name AS domain_name FROM access_requests r LEFT JOIN learning_domains d ON d.id=r.domain_id WHERE email=$1 ORDER BY r.id DESC LIMIT 1",[u.email])).rows[0]??null;
   const user = {
+    domainId:access.domain_id, domainName:access.name, accessScope:`${u.id}:${access.domain_id??"none"}:${access.access_version}:${access.enforced}`, request,
     id: u.id, email: u.email, name: u.name,
-    avatar_url: u.avatar_url, role: u.role, isAllowed: !!u.is_allowed,
+    avatar_url: u.avatar_url, role: u.role, isAllowed: !!u.is_allowed && (staff(u)||!access.enforced||!!access.active),
   };
 
-  if (!u.is_allowed) {
+  if (!user.isAllowed) {
     return res.json({ authenticated: true, user, terms: [], interview: [] });
   }
 
-  // Fetch content in parallel
-  const [terms, interview] = await Promise.all([
-    pgPool.query("SELECT t, d, l, c FROM uploaded_terms"),
-    pgPool.query("SELECT question, ideal_answer, role, company, category FROM uploaded_interview"),
-  ]);
-
-  res.json({
-    authenticated: true,
-    user,
-    terms: terms.rows,
-    interview: interview.rows,
-  });
-});
+  const [terms,interview]=await Promise.all([content(u,'terms'),content(u,'interview')]);
+  res.set('Cache-Control','no-store');
+  res.json({authenticated:true,user,terms,interview});
+}));
 
 apiAuthRouter.post("/logout", (req, res, next) => {
   req.logout((err) => {

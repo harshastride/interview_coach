@@ -40,14 +40,17 @@ export default function Sidebar({ currentUser, canUpload, onLogout, onOpenAdmin 
   });
 
   useEffect(() => {
+    document.documentElement.style.setProperty('--sidebar-width', collapsed ? '64px' : '240px');
     try { localStorage.setItem('stint-sidebar-collapsed', String(collapsed)); }
     catch {}
   }, [collapsed]);
 
+  if (location.pathname === '/interview/session') return null;
+
   return (
     <aside
       className={cn(
-        'hidden md:flex flex-col fixed left-0 top-0 h-screen z-30 bg-[var(--stint-bg-elevated)] border-r border-[var(--stint-border)] transition-all duration-200',
+        'hidden md:flex flex-col fixed left-0 top-0 h-dvh z-30 bg-[var(--stint-bg-elevated)] border-r border-[var(--stint-border)] transition-all duration-200',
         collapsed ? 'w-16' : 'w-60',
       )}
     >
@@ -59,7 +62,7 @@ export default function Sidebar({ currentUser, canUpload, onLogout, onOpenAdmin 
       {/* Nav items */}
       <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
         {NAV_ITEMS.map((item) => {
-          const isActive = item.id === activeId;
+          const isActive = item.id === activeId && !location.pathname.startsWith('/staff');
           return (
             <button
               key={item.id}
@@ -84,15 +87,16 @@ export default function Sidebar({ currentUser, canUpload, onLogout, onOpenAdmin 
           <>
             <div className="my-3 mx-3 border-t border-[var(--stint-border)]" />
             <button
-              onClick={onOpenAdmin}
+              onClick={()=>navigate('/staff/overview')}
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[var(--stint-text-muted)] hover:text-[var(--stint-text)] hover:bg-[var(--stint-bg)] transition-colors',
                 collapsed && 'justify-center px-0',
               )}
-              title={collapsed ? 'Admin Panel' : undefined}
+              aria-current={location.pathname.startsWith('/staff')?'page':undefined}
+              title={collapsed ? 'Staff workspace' : undefined}
             >
               <Settings size={20} className="shrink-0" />
-              {!collapsed && <span>Admin Panel</span>}
+              {!collapsed && <span>Staff workspace</span>}
             </button>
           </>
         )}

@@ -1,8 +1,11 @@
+import { safeRouter } from '../safeRouter.ts';
+import { content } from '../domain/access.ts';
+import { randomUUID } from 'node:crypto';
 import express from "express";
 import { pgPool } from "../db/pool.ts";
 import { requireAuth, type DbUser } from "../middleware/auth.ts";
 
-const router = express.Router();
+const router = safeRouter();
 
 // ── GET /api/study/due-cards ──
 router.get("/due-cards", requireAuth, async (req, res) => {
@@ -15,7 +18,9 @@ router.get("/due-cards", requireAuth, async (req, res) => {
      ORDER BY next_review ASC`,
     [userId]
   );
-  res.json(result.rows);
+  const allowed=new Set((await content(req.user!,'terms')).map(t=>`term-${t.id}`));
+  res.set('Cache-Control','no-store');
+  res.json(res.locals.domain?.enforced?result.rows.filter(r=>allowed.has(r.term_slug)):result.rows);
 });
 
 // ── GET /api/study/all-reviews ──
@@ -27,7 +32,9 @@ router.get("/all-reviews", requireAuth, async (req, res) => {
      FROM card_reviews WHERE user_id = $1`,
     [userId]
   );
-  res.json(result.rows);
+  const allowed=new Set((await content(req.user!,'terms')).map(t=>`term-${t.id}`));
+  res.set('Cache-Control','no-store');
+  res.json(res.locals.domain?.enforced?result.rows.filter(r=>allowed.has(r.term_slug)):result.rows);
 });
 
 // ── POST /api/study/review — SM-2 update (single UPSERT, no pre-read) ──
@@ -145,11 +152,16 @@ router.get("/streaks", requireAuth, async (req, res) => {
 router.post("/activity", requireAuth, async (req, res) => {
   const userId = (req.user as DbUser).id;
   const { cards_studied, quiz_answered, time_spent_sec } = req.body;
+  if(![cards_studied??0,quiz_answered??0,time_spent_sec??0].every(v=>Number.isFinite(Number(v))&&Number(v)>=0&&Number(v)<=100000))return res.status(400).json({error:'Invalid activity counts.'});
+  const client=await pgPool.connect();
+  try { await client.query('BEGIN');
   const cards = Math.max(0, Math.floor(Number(cards_studied) || 0));
   const quiz = Math.max(0, Math.floor(Number(quiz_answered) || 0));
   const time = Math.max(0, Math.floor(Number(time_spent_sec) || 0));
 
-  await pgPool.query(
+  const recorded=await client.query(`INSERT INTO domain_activity(user_id,domain_id,cards,quizzes,submission_id) VALUES($1,$2,$3,$4,$5) ON CONFLICT(user_id,submission_id) DO NOTHING RETURNING id`,[userId,res.locals.domain?.domain_id??null,cards,quiz,typeof req.body.submissionId==='string'?req.body.submissionId.slice(0,100):randomUUID()]);
+  if(!recorded.rows.length){await client.query('COMMIT');return res.json({ok:true});}
+  await client.query(
     `INSERT INTO daily_activity (user_id, activity_date, cards_studied, quiz_answered, time_spent_sec)
      VALUES ($1, CURRENT_DATE, $2, $3, $4)
      ON CONFLICT (user_id, activity_date) DO UPDATE SET
@@ -158,7 +170,9 @@ router.post("/activity", requireAuth, async (req, res) => {
        time_spent_sec = daily_activity.time_spent_sec + $4`,
     [userId, cards, quiz, time]
   );
+  await client.query('COMMIT');
   res.json({ ok: true });
+  }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
 });
 
 // ── GET /api/study/bookmarks ──
@@ -169,7 +183,9 @@ router.get("/bookmarks", requireAuth, async (req, res) => {
     "SELECT term_slug, created_at FROM bookmarks WHERE user_id = $1 ORDER BY created_at DESC",
     [userId]
   );
-  res.json(result.rows);
+  const allowed=new Set((await content(req.user!,'terms')).map(t=>`term-${t.id}`));
+  res.set('Cache-Control','no-store');
+  res.json(res.locals.domain?.enforced?result.rows.filter(r=>allowed.has(r.term_slug)):result.rows);
 });
 
 // ── POST /api/study/bookmarks — Toggle (single query) ──
@@ -205,7 +221,9 @@ router.get("/session-state/:module", requireAuth, async (req, res) => {
     "SELECT state_json FROM session_state WHERE user_id = $1 AND module = $2",
     [userId, module]
   );
-  res.json(result.rows[0]?.state_json ?? null);
+  const saved=result.rows[0]?.state_json; const scope=res.locals.domain;
+  res.set('Cache-Control','no-store');
+  res.json(saved && saved._domainId===(scope?.domain_id??null) && saved._accessVersion===(scope?.access_version??1)?saved.payload:null);
 });
 
 // ── PUT /api/study/session-state/:module ──
@@ -220,7 +238,7 @@ router.put("/session-state/:module", requireAuth, async (req, res) => {
     `INSERT INTO session_state (user_id, module, state_json, updated_at)
      VALUES ($1, $2, $3, NOW())
      ON CONFLICT (user_id, module) DO UPDATE SET state_json = $3, updated_at = NOW()`,
-    [userId, module, JSON.stringify(stateJson)]
+    [userId, module, JSON.stringify({_domainId:res.locals.domain?.domain_id??null,_accessVersion:res.locals.domain?.access_version??1,payload:stateJson})]
   );
   res.json({ ok: true });
 });

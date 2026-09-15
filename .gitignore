@@ -15,3 +15,8 @@ graphify-out/
 *.db-shm
 *.db-wal
 audio_cache/
+
+# Python analysis environment and model cache
+analysis/.venv/
+analysis/.cache/
+__pycache__/

@@ -6,12 +6,35 @@ services:
         GEMINI_API_KEY: ${GEMINI_API_KEY}
     ports:
       - "8000:3000"
+    # All secrets + the Supabase DATABASE_URL are read from .env.
+    # No local Postgres service — the app connects directly to Supabase.
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - APP_URL=${APP_URL}
-      - DATABASE_URL=${DATABASE_URL}
+      # Local reading-analysis service (whisper + praat + ollama coaching).
+      # Remove this line to analyze readings with Gemini instead.
+      - ANALYSIS_URL=http://analysis:8001
+    depends_on:
+      - analysis
     restart: unless-stopped
+
+  analysis:
+    build: ./analysis
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      # Ollama runs on the HOST (install: https://ollama.com), so the
+      # container reaches it via host.docker.internal. Leave empty to use
+      # the built-in template coaching instead of an LLM.
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
+      - ENABLE_EMOTION=${ENABLE_EMOTION:-0}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Whisper (and optional emotion) model weights persist across rebuilds
+      - analysis-cache:/root/.cache
+    restart: unless-stopped
+
+volumes:
+  analysis-cache:

@@ -1,3 +1,4 @@
+import { setAccessScope } from '../lib/accessScope';
 import { useState, useEffect, useCallback } from 'react';
 
 export type AuthStatus = 'loading' | 'unauthenticated' | 'access_denied' | 'authenticated';
@@ -9,6 +10,10 @@ export interface AuthUser {
   avatar_url: string | null;
   role: string;
   isAllowed: boolean;
+  domainId?: number;
+  domainName?: string;
+  accessScope?: string;
+  request?: { status:string;domain_id:number;domain_name:string } | null;
 }
 
 const FETCH_HEADERS = {
@@ -16,26 +21,8 @@ const FETCH_HEADERS = {
   'Content-Type': 'application/json',
 };
 
-const CACHE_KEY = 'stint-bootstrap-cache';
-
-function getCachedBootstrap(): BootstrapData | null {
-  try {
-    const raw = sessionStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    // Cache valid for 5 minutes
-    if (Date.now() - parsed._ts > 5 * 60 * 1000) return null;
-    return parsed;
-  } catch { return null; }
-}
-
-function setCachedBootstrap(data: BootstrapData) {
-  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ...data, _ts: Date.now() })); }
-  catch {}
-}
-
 interface BootstrapData {
-  terms: { t: string; d: string; l: number; c: string }[];
+  terms: { id?: number; t: string; d: string; l: number; c: string }[];
   interview: { question: string; ideal_answer: string; role: string; company: string; category?: string }[];
 }
 
@@ -46,12 +33,7 @@ export function useAuth() {
 
   // Stale-while-revalidate: show cached data instantly, refresh in background
   useEffect(() => {
-    const cached = getCachedBootstrap();
-    if (cached) {
-      // Instant render from cache
-      setBootstrapData({ terms: cached.terms, interview: cached.interview });
-    }
-
+    sessionStorage.removeItem('stint-bootstrap-cache');
     fetch('/api/auth/bootstrap', {
       credentials: 'include',
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -65,7 +47,7 @@ export function useAuth() {
             interview: Array.isArray(data.interview) ? data.interview : [],
           };
           setBootstrapData(bd);
-          setCachedBootstrap(bd);
+          setAccessScope(data.user.accessScope??'');
           setAuthStatus('authenticated');
         } else if (data.authenticated && data.user) {
           setCurrentUser(data.user);
@@ -78,6 +60,8 @@ export function useAuth() {
   }, []);
 
   const handleLogout = useCallback(() => {
+    setAccessScope('');
+    sessionStorage.removeItem('stint-bootstrap-cache');
     fetch('/api/auth/logout', {
       method: 'POST',
       credentials: 'include',

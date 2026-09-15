@@ -12,7 +12,12 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ onClose, currentUser, onContentRefresh }: AdminPanelProps) {
-  const [tab, setTab] = useState<AdminTab>('users');
+  const [tab, setTab] = useState<AdminTab>(currentUser?.role==='admin'?'users':'upload');
+  const [uploadError,setUploadError]=useState('');
+  async function createContent(kind:string,body:any){setUploadError('');try{const r=await fetch('/api/admin/'+kind,{method:'POST',headers:FETCH_HEADERS,credentials:'include',body:JSON.stringify({...body,domainIds})});const d=await r.json();if(!r.ok)throw Error(d.error);fetchTerms();fetchInterview();onContentRefresh();return true;}catch(e){setUploadError((e as Error).message);return false;}}
+  const [domains,setDomains]=useState<any[]>([]);
+  const [domainIds,setDomainIds]=useState<number[]>([]);
+  useEffect(()=>{fetch('/api/staff/domains').then(r=>r.ok?r.json():[]).then(setDomains);},[]);
   const isAdmin = currentUser?.role === 'admin';
   const canUpload = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
@@ -43,7 +48,7 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
   const [termForm, setTermForm] = useState({ t: '', d: '', l: 4, c: '' });
   const [interviewForm, setInterviewForm] = useState({ question: '', ideal_answer: '', role: '', company: '', category: '' });
   const [bulkInterview, setBulkInterview] = useState({ role: '', company: '', category: '', entries: [] as { question: string; ideal_answer: string }[], preview: [] as string[][] });
-  const [bulkTerms, setBulkTerms] = useState({ entries: [] as { t: string; d: string; l: number; c: string }[], preview: [] as string[][] });
+  const [bulkTerms, setBulkTerms] = useState({ entries: [] as { id?: number; t: string; d: string; l: number; c: string }[], preview: [] as string[][] });
   const [bulkImporting, setBulkImporting] = useState(false);
 
   // TTS bulk generation state
@@ -113,7 +118,7 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
   const fetchProgress = () => fetch('/api/admin/progress', { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then((r) => r.json()).then(setProgressRows);
   const fetchTerms = () => fetch('/api/admin/terms', { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then((r) => r.json()).then(setTermsList);
   const fetchInterview = () => fetch('/api/admin/interview', { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then((r) => r.json()).then(setInterviewList);
-  const fetchTtsStats = () => fetch('/api/ai/tts/stats', { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then((r) => r.json()).then(setTtsStats).catch(() => {});
+  const fetchTtsStats = () => !isAdmin ? Promise.resolve() : fetch('/api/ai/tts/stats', { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then((r) => r.json()).then(setTtsStats).catch(() => {});
 
   const fetchTtsJob = () => fetch('/api/ai/tts/job', { credentials: 'include', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
     .then((r) => r.json()).then((job) => {
@@ -186,7 +191,7 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
     if (tab === 'upload' || tab === 'delete') {
       fetchTerms();
       fetchInterview();
-      if (tab === 'upload') {
+      if (tab === 'upload' && isAdmin) {
         fetchTtsStats();
         fetchTtsJob().then(() => {
           if (ttsJob?.running) startPolling();
@@ -224,7 +229,7 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
     <div className="fixed inset-0 z-50 bg-black/50 flex flex-col items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-xl border border-[var(--stint-border)] w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-[var(--stint-border)]">
-          <h2 className="text-lg font-bold text-[var(--stint-primary)]">Admin Panel</h2>
+          <h2 className="text-lg font-bold text-[var(--stint-primary)]">{isAdmin?'Management':'Content uploads'}</h2>
           <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--stint-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--stint-primary)]" aria-label="Close admin panel">&#x2715;</button>
         </div>
         <div className="flex border-b border-[var(--stint-border)] overflow-x-auto">
@@ -232,15 +237,15 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
             <>
               <button className={tabClass('users')} onClick={() => setTab('users')}>Users</button>
               <button className={tabClass('allowlist')} onClick={() => setTab('allowlist')}>Allowlist</button>
-              <button className={tabClass('requests')} onClick={() => setTab('requests')}>Requests</button>
               <button className={tabClass('audit')} onClick={() => setTab('audit')}>Audit Log</button>
             </>
           )}
-          {canUpload && <button className={tabClass('progress')} onClick={() => setTab('progress')}>Progress</button>}
           {canUpload && <button className={tabClass('upload')} onClick={() => setTab('upload')}>Upload Content</button>}
           {canUpload && <button className={tabClass('delete')} onClick={() => setTab('delete')}>Delete Content</button>}
         </div>
         <div className="flex-1 overflow-auto p-4">
+          {uploadError&&<p role="alert" className="text-sm text-red-600">{uploadError}</p>}
+          {tab==='upload'&&<fieldset className="mb-4 p-4 rounded-xl border border-[var(--stint-border)]"><legend className="text-sm font-semibold">Domains for this upload</legend><p className="text-xs mb-3">Select at least one. Shared content can belong to several domains.</p><div className="flex flex-wrap gap-4">{domains.filter(d=>d.active).map(d=><label key={d.id} className="text-xs flex gap-2 items-center"><input type="checkbox" checked={domainIds.includes(d.id)} onChange={e=>setDomainIds(e.target.checked?[...domainIds,d.id]:domainIds.filter(id=>id!==d.id))}/>{d.name}</label>)}</div></fieldset>}
           {tab === 'users' && isAdmin && (
             <div className="space-y-3">
               {users.map((u) => (
@@ -257,9 +262,9 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                       }}
                       className="text-sm border border-[var(--stint-border)] rounded-lg px-2 py-1.5 bg-white"
                     >
-                      <option value="admin">admin</option>
-                      <option value="manager">manager</option>
-                      <option value="viewer">viewer</option>
+                      <option value="admin">Admin</option>
+                      <option value="manager">Editor</option>
+                      <option value="viewer">Candidate</option>
                     </select>
                     <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                       <input type="checkbox" className="rounded" checked={!!u.is_allowed} onChange={(e) => fetch('/api/admin/users/' + u.id, { method: 'PATCH', credentials: 'include', headers: FETCH_HEADERS, body: JSON.stringify({ is_allowed: e.target.checked ? 1 : 0 }) }).then(() => fetchUsers())} />
@@ -432,7 +437,7 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                       </datalist>
                     </div>
                   </div>
-                  <button type="button" className="px-4 py-2 rounded-full bg-[var(--stint-primary)] text-white w-fit" onClick={() => fetch('/api/admin/terms', { method: 'POST', credentials: 'include', headers: FETCH_HEADERS, body: JSON.stringify(termForm) }).then(() => { setTermForm({ t: '', d: '', l: 4, c: '' }); fetchTerms(); onContentRefresh(); })}>Add term</button>
+                  <button type="button" className="px-4 py-2 rounded-full bg-[var(--stint-primary)] text-white w-fit" disabled={!domainIds.length} onClick={async()=>{if(await createContent('terms',termForm))setTermForm({t:'',d:'',l:4,c:''});}}>Add term</button>
                 </div>
               </section>
               <section>
@@ -488,7 +493,7 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                       onClick={async () => {
                         setBulkImporting(true);
                         try {
-                          const r = await fetch('/api/admin/terms/bulk', { method: 'POST', credentials: 'include', headers: FETCH_HEADERS, body: JSON.stringify({ entries: bulkTerms.entries }) });
+                          const r = await fetch('/api/admin/terms/bulk', { method: 'POST', credentials: 'include', headers: FETCH_HEADERS, body: JSON.stringify({ domainIds, entries: bulkTerms.entries }) });
                           if (r.ok) { setBulkTerms({ entries: [], preview: [] }); fetchTerms(); onContentRefresh(); } else { const j = await r.json().catch(() => ({})); alert(j.error || 'Import failed'); }
                         } finally { setBulkImporting(false); }
                       }}
@@ -521,7 +526,7 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                     <label htmlFor="admin-int-answer" className="block text-xs font-semibold text-[var(--stint-text-muted)] mb-1">Ideal answer *</label>
                     <textarea id="admin-int-answer" placeholder="Ideal answer" value={interviewForm.ideal_answer} onChange={(e) => setInterviewForm((f) => ({ ...f, ideal_answer: e.target.value }))} className="w-full border border-[var(--stint-border)] rounded-xl px-3 py-2 text-sm" rows={3} />
                   </div>
-                  <button type="button" className="px-4 py-2 rounded-full bg-[var(--stint-primary)] text-white w-fit" onClick={() => fetch('/api/admin/interview', { method: 'POST', credentials: 'include', headers: FETCH_HEADERS, body: JSON.stringify(interviewForm) }).then(() => { setInterviewForm({ question: '', ideal_answer: '', role: '', company: '', category: '' }); fetchInterview(); onContentRefresh(); })}>Add Q&A</button>
+                  <button type="button" className="px-4 py-2 rounded-full bg-[var(--stint-primary)] text-white w-fit" disabled={!domainIds.length} onClick={async()=>{if(await createContent('interview',interviewForm))setInterviewForm({question:'',ideal_answer:'',role:'',company:'',category:''});}}>Add Q&A</button>
                 </div>
               </section>
               <section>
@@ -586,7 +591,7 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                       onClick={async () => {
                         setBulkImporting(true);
                         try {
-                          const r = await fetch('/api/admin/interview/bulk', { method: 'POST', credentials: 'include', headers: FETCH_HEADERS, body: JSON.stringify({ entries: bulkInterview.entries, role: bulkInterview.role.trim(), company: bulkInterview.company.trim(), category: bulkInterview.category.trim() || undefined }) });
+                          const r = await fetch('/api/admin/interview/bulk', { method: 'POST', credentials: 'include', headers: FETCH_HEADERS, body: JSON.stringify({ domainIds, entries: bulkInterview.entries, role: bulkInterview.role.trim(), company: bulkInterview.company.trim(), category: bulkInterview.category.trim() || undefined }) });
                           if (r.ok) { setBulkInterview((b) => ({ ...b, entries: [], preview: [] })); fetchInterview(); onContentRefresh(); } else { const j = await r.json().catch(() => ({})); alert(j.error === 'Duplicates found' ? `Duplicates: ${(j.duplicates || []).join(', ')}` : j.error || 'Import failed'); }
                         } finally { setBulkImporting(false); }
                       }}

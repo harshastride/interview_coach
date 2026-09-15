@@ -1,4 +1,51 @@
+import { domainSchema } from '../domain/schema.ts';
 import { pgPool } from "./pool.ts";
+
+// Tables added after the original schema — must be ensured on every boot
+// because the full init block below is skipped once base tables exist.
+const MIGRATIONS_SQL = `
+  CREATE TABLE IF NOT EXISTS reading_analysis_jobs (
+    id BIGSERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    fingerprint TEXT NOT NULL,
+    question_ref TEXT NOT NULL,
+    month DATE NOT NULL,
+    azure_seconds INTEGER NOT NULL DEFAULT 0 CHECK (azure_seconds BETWEEN 0 AND 181),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','complete','failed')),
+    result JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, fingerprint)
+  );
+  CREATE INDEX IF NOT EXISTS idx_reading_jobs_month ON reading_analysis_jobs(user_id, month);
+  ALTER TABLE reading_analysis_jobs ENABLE ROW LEVEL SECURITY;
+  REVOKE ALL ON reading_analysis_jobs FROM PUBLIC;
+  DO $$ BEGIN
+    IF EXISTS (SELECT FROM pg_roles WHERE rolname='anon') THEN
+      REVOKE ALL ON reading_analysis_jobs FROM anon;
+    END IF;
+    IF EXISTS (SELECT FROM pg_roles WHERE rolname='authenticated') THEN
+      REVOKE ALL ON reading_analysis_jobs FROM authenticated;
+    END IF;
+  END $$;
+
+  CREATE TABLE IF NOT EXISTS reading_attempts (
+    id            SERIAL PRIMARY KEY,
+    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    question_ref  TEXT NOT NULL,
+    role          TEXT,
+    attempt_no    INTEGER NOT NULL DEFAULT 1,
+    overall_score INTEGER,
+    accuracy      INTEGER,
+    fluency       INTEGER,
+    completeness  INTEGER,
+    wpm           INTEGER,
+    filler_count  INTEGER,
+    transcript    TEXT,
+    feedback      JSONB,
+    created_at    TIMESTAMPTZ DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_reading_attempts_user ON reading_attempts (user_id, created_at DESC);
+`;
 
 export async function initPg() {
   if (!process.env.DATABASE_URL) {
@@ -12,7 +59,9 @@ export async function initPg() {
       SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users' LIMIT 1
     `);
     if (check.rows.length > 0) {
-      return; // Tables already exist, skip init
+      await client.query(MIGRATIONS_SQL);
+      await client.query(domainSchema);
+      return; // Base tables already exist, skip full init
     }
 
     // First-time setup: create all tables
@@ -92,13 +141,14 @@ export async function initPg() {
       CREATE TABLE IF NOT EXISTS card_reviews (
         id          SERIAL PRIMARY KEY,
         user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        term_id     INTEGER NOT NULL REFERENCES uploaded_terms(id) ON DELETE CASCADE,
+        term_slug   TEXT NOT NULL,
         ease_factor REAL NOT NULL DEFAULT 2.5,
-        interval_d  REAL NOT NULL DEFAULT 0,
+        interval_days INTEGER NOT NULL DEFAULT 0,
         repetitions INTEGER NOT NULL DEFAULT 0,
         next_review TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        last_review TIMESTAMPTZ,
-        UNIQUE(user_id, term_id)
+        last_rating INTEGER,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(user_id, term_slug)
       );
 
       CREATE TABLE IF NOT EXISTS daily_activity (
@@ -115,7 +165,7 @@ export async function initPg() {
         user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         term_id   INTEGER NOT NULL REFERENCES uploaded_terms(id) ON DELETE CASCADE,
         created_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(user_id, term_id)
+        UNIQUE(user_id, term_slug)
       );
 
       CREATE TABLE IF NOT EXISTS session_state (
@@ -137,6 +187,8 @@ export async function initPg() {
       CREATE INDEX IF NOT EXISTS idx_daily_activity_user_date ON daily_activity (user_id, activity_date DESC);
       CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks (user_id);
     `);
+    await client.query(MIGRATIONS_SQL);
+      await client.query(domainSchema);
   } finally {
     client.release();
   }
