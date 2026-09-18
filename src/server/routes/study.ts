@@ -108,7 +108,7 @@ router.get("/streaks", requireAuth, async (req, res) => {
      streak AS (
        SELECT COUNT(*) as current_streak FROM (
          SELECT activity_date,
-                activity_date - (ROW_NUMBER() OVER (ORDER BY activity_date DESC))::int AS grp
+                activity_date + (ROW_NUMBER() OVER (ORDER BY activity_date DESC))::int AS grp
          FROM daily_activity
          WHERE user_id = $1
            AND activity_date >= CURRENT_DATE - INTERVAL '365 days'
@@ -116,10 +116,10 @@ router.get("/streaks", requireAuth, async (req, res) => {
          ORDER BY activity_date DESC
        ) s
        WHERE grp = (
-         SELECT activity_date - 1::int FROM daily_activity
+         SELECT activity_date + 1 FROM daily_activity
          WHERE user_id = $1 AND activity_date = CURRENT_DATE AND (cards_studied > 0 OR quiz_answered > 0)
          UNION ALL
-         SELECT activity_date FROM daily_activity
+         SELECT activity_date + 1 FROM daily_activity
          WHERE user_id = $1 AND activity_date = CURRENT_DATE - 1 AND (cards_studied > 0 OR quiz_answered > 0)
          LIMIT 1
        )

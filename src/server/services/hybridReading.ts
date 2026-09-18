@@ -27,7 +27,15 @@ export async function hybridReading(userId: number, input: { audio: string; mime
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...input, durationSec: duration, coaching: false }), signal: AbortSignal.timeout(240000),
     });
-    if (!response.ok) throw new Error();
+    if (!response.ok) {
+      if (response.status === 422) {
+        const body = await response.json().catch(() => ({}));
+        if (body?.detail === 'unreliable_recording') {
+          throw new ReadingError(422, "We couldn't get a clear reading from that recording. Try again in a quieter space, speaking at a natural pace.");
+        }
+      }
+      throw new Error();
+    }
     local = await response.json();
     if (!local?.transcript?.trim()) throw new ReadingError(422, 'No speech was recognised. Check your microphone and try again.');
     if (!['overall', 'accuracy', 'fluency', 'completeness'].every(k => Number.isFinite(local.scores?.[k])) || !local.delivery) throw new Error();

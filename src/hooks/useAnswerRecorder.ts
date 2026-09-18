@@ -182,6 +182,7 @@ export async function analyzeReading(
       method: 'POST',
       credentials: 'include',
       headers: FETCH_HEADERS,
+      signal: AbortSignal.timeout(240000),
       body: JSON.stringify({
         audio,
         mimeType: rec.mimeType,
@@ -207,22 +208,30 @@ export async function saveReadingAttempt(payload: {
   attempt_no: number;
   analysis: ReadingAnalysis;
 }): Promise<void> {
-  const response = await fetch('/api/reading-attempt', {
-    method: 'POST',
-    credentials: 'include',
-    headers: FETCH_HEADERS,
-    body: JSON.stringify({
-      question_ref: payload.question_ref,
-      receiptId: payload.analysis.receiptId,
-      contentId:payload.contentId, submissionId:payload.submissionId ?? crypto.randomUUID(),
-      role: payload.role,
-      attempt_no: payload.attempt_no,
-      scores: payload.analysis.scores,
-      wpm: payload.analysis.delivery.wpm,
-      filler_count: payload.analysis.delivery.filler_count,
-      transcript: payload.analysis.transcript,
-      feedback: payload.analysis,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch('/api/reading-attempt', {
+      method: 'POST',
+      credentials: 'include',
+      headers: FETCH_HEADERS,
+      signal: AbortSignal.timeout(30000),
+      body: JSON.stringify({
+        question_ref: payload.question_ref,
+        receiptId: payload.analysis.receiptId,
+        contentId:payload.contentId, submissionId:payload.submissionId ?? crypto.randomUUID(),
+        role: payload.role,
+        attempt_no: payload.attempt_no,
+        scores: payload.analysis.scores,
+        wpm: payload.analysis.delivery.wpm,
+        filler_count: payload.analysis.delivery.filler_count,
+        transcript: payload.analysis.transcript,
+        feedback: payload.analysis,
+      }),
+    });
+  } catch {
+    // Network error or timeout — surface as a retryable save failure
+    // instead of leaving the caller waiting on a promise that never settles.
+    throw new Error('Your report could not be saved. Please retry.');
+  }
   if (!response.ok) throw new Error('Your report could not be saved. Please retry.');
 }

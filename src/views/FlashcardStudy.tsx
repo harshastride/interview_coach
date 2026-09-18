@@ -137,6 +137,9 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
   const [wrongAnswers, setWrongAnswers] = useState<string[]>([]);
   const [reviewMode, setReviewMode] = useState(false);
 
+  // Quiz completion — stops the quiz instead of looping back to question 1
+  const [quizDone, setQuizDone] = useState(false);
+
   // Feature: type-your-answer in quiz
   const [typedAnswer, setTypedAnswer] = useState('');
   const [typedSubmitted, setTypedSubmitted] = useState(false);
@@ -147,6 +150,9 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
 
   // Feature: keyboard shortcut hint
   const [showKbHint, setShowKbHint] = useState(false);
+
+  // Quiz completed (went through all cards) — read the last question's answer, not yet dismissed
+  const quizFinished = mode === 'quiz' && !reviewMode && currentIndex >= terms.length - 1 && selectedOption !== null && showExplanation && !isLoadingExplanation;
 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
@@ -163,6 +169,7 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
     setShowExplanation(false);
     setWrongAnswers([]);
     setReviewMode(false);
+    setQuizDone(false);
   }, [originalTerms]);
 
   // Session resume: show banner if saved session exists
@@ -472,6 +479,7 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
   /* ---------------------------------------------------------------- */
   const enterReviewMode = () => {
     setReviewMode(true);
+    setQuizDone(false);
     setCurrentIndex(0);
     setIsFlipped(false);
     setSelectedOption(null);
@@ -575,7 +583,7 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
         case 'Enter':
           if (mode === 'quiz' && showExplanation && !isLoadingExplanation) {
             e.preventDefault();
-            handleNext();
+            if (quizFinished) setQuizDone(true); else handleNext();
           }
           break;
       }
@@ -583,7 +591,7 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [handleNext, handlePrev, mode, isFlipped, selectedOption, quizOptions, showExplanation, isLoadingExplanation, handleDifficultyRating]);
+  }, [handleNext, handlePrev, mode, isFlipped, selectedOption, quizOptions, showExplanation, isLoadingExplanation, handleDifficultyRating, quizFinished]);
 
   /* ---------------------------------------------------------------- */
   /*  Bookmark helpers                                                 */
@@ -683,8 +691,44 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
     );
   }
 
-  // Quiz completed (went through all cards)
-  const quizFinished = mode === 'quiz' && !reviewMode && currentIndex >= terms.length - 1 && selectedOption !== null && showExplanation && !isLoadingExplanation;
+  if (mode === 'quiz' && quizDone) {
+    const topBarQuizDone: GlobalTopBarProps = { sectionLabel: 'Quiz', stepLabel: 'Complete', showBack: true, onBack: () => { stopAudio(); navigate(setupPath); }, onHome: () => { stopAudio(); navigate('/'); }, rightSlot: headerRightSlot };
+    return (
+      <>
+        {showAdminPanel && <AdminPanel onClose={() => setShowAdminPanel(false)} currentUser={currentUser} onContentRefresh={onContentRefresh} />}
+        <AppLayout topBar={topBarQuizDone} bottomNav={bottomNavProps}>
+          <div className="w-full max-w-2xl mx-auto px-4 py-8 flex flex-col items-center justify-center min-h-[50vh] text-center">
+            <h2 className="text-xl font-semibold text-[var(--stint-primary)] mb-2">Quiz complete</h2>
+            <p className="text-sm text-[var(--stint-text-muted)] mb-6">
+              You scored {score.correct} out of {score.correct + score.incorrect}.
+            </p>
+            <div className="flex flex-wrap justify-center gap-3">
+              <button
+                onClick={() => { setScore({ correct: 0, incorrect: 0 }); setWrongAnswers([]); setCurrentIndex(0); setSelectedOption(null); setShowExplanation(false); setQuizDone(false); }}
+                className="px-6 py-3 rounded-full bg-[var(--stint-primary)] text-white font-medium hover:bg-[var(--stint-primary-dark)] focus:outline-none focus:ring-2 focus:ring-[var(--stint-primary)] focus:ring-offset-2"
+              >
+                Retake quiz
+              </button>
+              {wrongAnswers.length > 0 && (
+                <button
+                  onClick={enterReviewMode}
+                  className="px-6 py-3 rounded-full bg-rose-500 text-white font-medium hover:bg-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2"
+                >
+                  Review {wrongAnswers.length} wrong answer{wrongAnswers.length !== 1 ? 's' : ''}
+                </button>
+              )}
+              <button
+                onClick={() => navigate(setupPath)}
+                className="px-6 py-3 rounded-full border-2 border-[var(--stint-primary)] text-[var(--stint-primary)] font-medium hover:bg-[var(--stint-primary)]/10 focus:outline-none focus:ring-2 focus:ring-[var(--stint-primary)] focus:ring-offset-2"
+              >
+                Back to topics
+              </button>
+            </div>
+          </div>
+        </AppLayout>
+      </>
+    );
+  }
 
   if (!currentCard) return null;
 
@@ -1060,10 +1104,10 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
                       <>
                         <button
                           type="button"
-                          onClick={handleNext}
+                          onClick={quizFinished ? () => setQuizDone(true) : handleNext}
                           className="mt-4 w-full py-3 rounded-full bg-[var(--stint-primary)] text-white font-semibold text-base focus:outline-none focus:ring-2 focus:ring-[var(--stint-primary)] focus:ring-offset-2"
                         >
-                          Next question &rarr;
+                          {quizFinished ? 'Finish quiz' : 'Next question →'}
                         </button>
                         {/* Show "Review wrong answers" and "Download PDF" at end of quiz */}
                         {quizFinished && wrongAnswers.length > 0 && (
@@ -1123,10 +1167,10 @@ export default function FlashcardStudy({ uploadedTermsRaw, currentUser, onConten
               )}
 
               <button
-                onClick={handleNext}
+                onClick={quizFinished ? () => setQuizDone(true) : handleNext}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[var(--stint-primary)] text-white hover:bg-[var(--stint-primary-dark)] font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--stint-primary)] focus:ring-offset-2 focus:ring-offset-[var(--stint-bg)]"
               >
-                Next
+                {quizFinished ? 'Finish' : 'Next'}
                 <ChevronRight size={22} strokeWidth={2} />
               </button>
             </div>

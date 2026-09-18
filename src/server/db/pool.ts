@@ -12,3 +12,11 @@ export const pgPool = new pg.Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });
+
+// Idle pooled clients can be dropped by the remote host (e.g. Supabase's
+// pooler recycling idle connections) and emit 'error' on the pool. Without
+// a listener, Node treats that as an unhandled EventEmitter error and
+// crashes the whole process — the pool itself recovers fine on its own.
+pgPool.on("error", (err) => {
+  console.error("Idle Postgres client error (pool recovers automatically):", err.message);
+});

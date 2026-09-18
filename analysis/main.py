@@ -390,6 +390,12 @@ def analyze(req: AnalyzeRequest):
         word_count = len(norm_words(transcript))
         wpm = round(word_count / duration * 60)
 
+        # No one sustains this pace reading aloud — it means Whisper hallucinated
+        # a transcript from a very short/noisy clip, not a real fast reading.
+        # Reject it outright instead of turning that garbage into a 0/100 score.
+        if wpm > 280:
+            raise HTTPException(status_code=422, detail="unreliable_recording")
+
         accuracy, completeness, missed, restarts, spoken_all = align(req.referenceText, transcript)
         filler_count = sum(1 for w in spoken_all if w in FILLER_WORDS)
         long_pauses = pause_stats(words)

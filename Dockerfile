@@ -15,6 +15,7 @@ RUN npm ci
 COPY --from=builder /app/dist ./dist
 COPY server.ts ./
 COPY src/constants.ts ./src/
+COPY src/lib/ ./src/lib/
 COPY src/server/ ./src/server/
 COPY tsconfig.json ./
 

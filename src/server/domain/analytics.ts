@@ -65,7 +65,7 @@ router.get(
     const days = req.query.days === "7" ? 7 : 30,
       domain = req.query.domainId ? id(req.query.domainId) : null;
     const { start, end } = period(days);
-    const [users, readings, activity, latest, unassigned] = await Promise.all([
+    const [users, readings, activity, latest, unassigned, passages] = await Promise.all([
       pgPool.query(
         "SELECT u.id,u.name,u.email,u.is_allowed,u.domain_id,u.approved_at,d.name AS domain_name FROM users u LEFT JOIN learning_domains d ON d.id=u.domain_id WHERE u.role='viewer' AND u.google_id<>'local-development-bypass' ORDER BY u.name",
       ),
@@ -84,7 +84,16 @@ router.get(
       pgPool.query(
         "SELECT COUNT(*)::int AS n FROM reading_attempts a JOIN users u ON u.id=a.user_id WHERE a.domain_id IS NULL AND u.role='viewer' AND u.google_id<>'local-development-bypass'",
       ),
+      pgPool.query("SELECT id, question FROM uploaded_interview"),
     ]);
+    // Attempts recorded before content_id was tracked (or without a selected
+    // passage) only have question_ref text — fall back to matching that
+    // text to a passage so legacy readings still attribute to a passage.
+    const questionToId = new Map(
+      passages.rows.map((p) => [p.question, p.id]),
+    );
+    const resolveId = (r: { content_id: number | null; question_ref: string }) =>
+      r.content_id ?? questionToId.get(r.question_ref) ?? null;
     const candidates = users.rows.filter(
       (u) => !domain || u.domain_id === domain,
     );
@@ -104,14 +113,14 @@ router.get(
     const last = new Map(latest.rows.map((r) => [r.user_id, r.last_practice]));
     const mapped = candidates.map((u) => {
       const attempts = rr.filter((r) => r.user_id === u.id);
-      const passages = new Set(
-        attempts.map((r) => r.content_id ?? r.question_ref),
+      const attemptPassages = new Set(
+        attempts.map((r) => resolveId(r) ?? r.question_ref),
       );
       return {
         ...u,
         last_practice: last.get(u.id) ?? null,
         reading_count: attempts.length,
-        repeat_count: attempts.length - passages.size,
+        repeat_count: attempts.length - attemptPassages.size,
       };
     });
     const cutoff = Date.now() - 7 * 86400000;
@@ -137,10 +146,11 @@ router.get(
     });
     const byPassage = new Map<string, any>();
     for (const r of rr) {
-      const key = String(r.content_id ?? `legacy:${r.question_ref}`);
+      const resolvedId = resolveId(r);
+      const key = String(resolvedId ?? `legacy:${r.question_ref}`);
       if (!byPassage.has(key))
         byPassage.set(key, {
-          id: r.content_id,
+          id: resolvedId,
           question: r.question_ref,
           attempts: 0,
           readers: new Set(),

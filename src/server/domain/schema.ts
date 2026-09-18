@@ -1,6 +1,23 @@
 // Additive startup migration, alongside the existing application's schema initializer.
 export const domainSchema = `
 ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE email_allowlist ADD COLUMN IF NOT EXISTS added_by INTEGER REFERENCES users(id);
+ALTER TABLE email_allowlist ADD COLUMN IF NOT EXISTS added_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS performed_by INTEGER REFERENCES users(id);
+ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS target TEXT;
+UPDATE audit_log SET performed_by=user_id WHERE performed_by IS NULL AND user_id IS NOT NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='bookmarks' AND column_name='term_id') THEN
+    DROP TABLE bookmarks;
+    CREATE TABLE bookmarks (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      term_slug TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, term_slug)
+    );
+  END IF;
+END $$;
 ALTER TABLE daily_activity ADD COLUMN IF NOT EXISTS time_spent_sec INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE access_requests ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id);

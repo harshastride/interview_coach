@@ -105,7 +105,9 @@ export async function initPg() {
       );
 
       CREATE TABLE IF NOT EXISTS email_allowlist (
-        email TEXT PRIMARY KEY
+        email      TEXT PRIMARY KEY,
+        added_by   INTEGER REFERENCES users(id),
+        added_at   TIMESTAMPTZ DEFAULT NOW()
       );
 
       CREATE TABLE IF NOT EXISTS audit_log (
@@ -163,7 +165,7 @@ export async function initPg() {
       CREATE TABLE IF NOT EXISTS bookmarks (
         id        SERIAL PRIMARY KEY,
         user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        term_id   INTEGER NOT NULL REFERENCES uploaded_terms(id) ON DELETE CASCADE,
+        term_slug TEXT NOT NULL,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE(user_id, term_slug)
       );

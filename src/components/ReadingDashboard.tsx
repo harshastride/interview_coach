@@ -23,6 +23,10 @@ export default function ReadingDashboard({ history = false, revision = false, pa
     return () => { active = false; };
   }, [refresh]);
   const latest = attempts[0];
+  const last10Scores = attempts.slice(0, 10).map(a => a.overall_score).filter((s): s is number => s != null);
+  const avgLast10 = last10Scores.length ? Math.round(last10Scores.reduce((s, n) => s + n, 0) / last10Scores.length) : null;
+  const last10Paces = attempts.slice(0, 10).map(a => a.wpm).filter((w): w is number => w != null);
+  const avgPaceLast10 = last10Paces.length ? Math.round(last10Paces.reduce((s, n) => s + n, 0) / last10Paces.length) : null;
   return <section aria-label="Reading practice dashboard" className="space-y-5">
     {!revision && <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-lg font-semibold">{history ? 'Reading history' : 'Your reading overview'}</h2><p className="mt-1 text-xs text-[var(--stint-text-muted)]">Counts cover your latest 50 saved attempts.</p></div>{!history && <Link to="/reading/history" className="text-sm font-semibold text-[var(--stint-primary)] hover:underline">View reading history →</Link>}</div>}
     {status === 'loading' ? <p role="status" className={`${panel} p-6 text-sm`}>Loading your reading history…</p> : status === 'error' ? <div role="alert" className={`${panel} flex items-center justify-between gap-4 p-6 text-sm`}><p>We couldn’t load your reading history.</p><button onClick={() => setRefresh(value => value + 1)} className="flex items-center gap-2 text-[var(--stint-primary)]"><RefreshCw size={15} />Try again</button></div> : revision ? <ReadingRevisionQueue attempts={attempts} passages={passages ?? []} /> : <>
@@ -34,6 +38,18 @@ export default function ReadingDashboard({ history = false, revision = false, pa
           ['Latest reading score', latest?.overall_score == null ? '—' : `${latest.overall_score}/100`, 'An estimate for one attempt'],
           ['Latest reading pace', latest?.wpm == null ? '—' : `${latest.wpm} wpm`, 'Speed is only part of fluency'],
         ].map(([label, value, description]) => <div key={label} className={`${panel} p-4 md:p-5`}><p className="text-xs text-[var(--stint-text-muted)]">{label}</p><p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums">{value}</p><p className="mt-2 text-[11px] text-[var(--stint-text-muted)]">{description}</p></div>)}
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className={`${panel} p-4 md:p-5`}>
+          <p className="text-xs text-[var(--stint-text-muted)]">Average score (last {last10Scores.length || 10} readings)</p>
+          <p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums">{avgLast10 == null ? '—' : `${avgLast10}/100`}</p>
+          <p className="mt-2 text-[11px] text-[var(--stint-text-muted)]">Cumulative trend across your most recent readings, not just one attempt</p>
+        </div>
+        <div className={`${panel} p-4 md:p-5`}>
+          <p className="text-xs text-[var(--stint-text-muted)]">Average pace (last {last10Paces.length || 10} readings)</p>
+          <p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums">{avgPaceLast10 == null ? '—' : `${avgPaceLast10} wpm`}</p>
+          <p className="mt-2 text-[11px] text-[var(--stint-text-muted)]">Cumulative pace trend, smoothing out any one-off attempt</p>
+        </div>
       </div>
       {!attempts.length ? <div className={`${panel} p-8 text-center`}><BookOpen className="mx-auto text-[var(--stint-primary)]" size={28} /><h3 className="mt-4 text-lg font-semibold">Your first reading starts the story</h3><p className="mx-auto mt-2 max-w-md text-sm text-[var(--stint-text-muted)]">Complete a recording to see your transcript, reading scores, strengths, and suggestions here.</p></div> : <div className={`${panel} overflow-hidden`}>
         <h3 className="border-b border-[var(--stint-border)] p-4 font-semibold">{history ? 'Saved readings' : 'Recent readings'}</h3>

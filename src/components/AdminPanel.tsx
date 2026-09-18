@@ -261,10 +261,11 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                         fetch('/api/admin/users/' + u.id, { method: 'PATCH', credentials: 'include', headers: FETCH_HEADERS, body: JSON.stringify({ role: e.target.value }) }).then(fetchUsers);
                       }}
                       className="text-sm border border-[var(--stint-border)] rounded-lg px-2 py-1.5 bg-white"
+                      style={{ color: '#1A1A1A', backgroundColor: '#fff' }}
                     >
-                      <option value="admin">Admin</option>
-                      <option value="manager">Editor</option>
-                      <option value="viewer">Candidate</option>
+                      <option value="admin" style={{ color: '#1A1A1A', backgroundColor: '#fff' }}>Admin</option>
+                      <option value="manager" style={{ color: '#1A1A1A', backgroundColor: '#fff' }}>Editor</option>
+                      <option value="viewer" style={{ color: '#1A1A1A', backgroundColor: '#fff' }}>Candidate</option>
                     </select>
                     <label className="flex items-center gap-1.5 text-sm cursor-pointer">
                       <input type="checkbox" className="rounded" checked={!!u.is_allowed} onChange={(e) => fetch('/api/admin/users/' + u.id, { method: 'PATCH', credentials: 'include', headers: FETCH_HEADERS, body: JSON.stringify({ is_allowed: e.target.checked ? 1 : 0 }) }).then(() => fetchUsers())} />
@@ -418,8 +419,8 @@ export default function AdminPanel({ onClose, currentUser, onContentRefresh }: A
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label htmlFor="admin-term-l" className="block text-xs font-semibold text-[var(--stint-text-muted)] mb-1">Level</label>
-                      <select id="admin-term-l" value={termForm.l} onChange={(e) => setTermForm((f) => ({ ...f, l: Number(e.target.value) }))} className="w-full border border-[var(--stint-border)] rounded-xl px-3 py-2 text-sm">
-                        {[2, 3, 4, 5].map((l) => <option key={l} value={l}>{l}</option>)}
+                      <select id="admin-term-l" value={termForm.l} onChange={(e) => setTermForm((f) => ({ ...f, l: Number(e.target.value) }))} className="w-full border border-[var(--stint-border)] rounded-xl px-3 py-2 text-sm" style={{ color: '#1A1A1A', backgroundColor: '#fff' }}>
+                        {[2, 3, 4, 5].map((l) => <option key={l} value={l} style={{ color: '#1A1A1A', backgroundColor: '#fff' }}>{l}</option>)}
                       </select>
                     </div>
                     <div>
