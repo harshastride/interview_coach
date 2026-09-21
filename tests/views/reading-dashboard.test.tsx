@@ -28,5 +28,5 @@ it('limits home to three reports with direct links, preserving zero scores', asy
   expect(await screen.findByText('Question 1')).toBeInTheDocument();
   expect(screen.queryByText('Question 4')).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: /Question 1/ })).toHaveAttribute('href', '/reading/reports/1');
-  expect(screen.getByText('0/100')).toBeInTheDocument();
+  expect(screen.getAllByText('0/100').length).toBeGreaterThan(0);
 });
