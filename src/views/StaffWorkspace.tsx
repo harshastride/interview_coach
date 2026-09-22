@@ -381,7 +381,100 @@ function StaffWorkspacePage({
                   >
                     ← Back to candidates
                   </Link>
-                  <PracticeAssignments key={candidateId} staffCandidateId={Number(candidateId)} />
+                  {(() => {
+                    const attempts = data.attempts ?? [];
+                    const latest = attempts[0];
+                    const last10Scores = attempts
+                      .slice(0, 10)
+                      .map((a: any) => a.overall_score)
+                      .filter((s: any): s is number => s != null);
+                    const avgLast10 = last10Scores.length
+                      ? Math.round(
+                          last10Scores.reduce((s: number, n: number) => s + n, 0) /
+                            last10Scores.length,
+                        )
+                      : null;
+                    const last10Paces = attempts
+                      .slice(0, 10)
+                      .map((a: any) => a.wpm)
+                      .filter((w: any): w is number => w != null);
+                    const avgPaceLast10 = last10Paces.length
+                      ? Math.round(
+                          last10Paces.reduce((s: number, n: number) => s + n, 0) /
+                            last10Paces.length,
+                        )
+                      : null;
+                    return (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                          {[
+                            [
+                              "Saved readings",
+                              attempts.length === 50
+                                ? "50 most recent"
+                                : String(attempts.length),
+                              "Candidate's recent practice history",
+                            ],
+                            [
+                              "Passages practised",
+                              String(
+                                new Set(attempts.map((a: any) => a.question_ref)).size,
+                              ),
+                              "Across the readings shown",
+                            ],
+                            [
+                              "Latest reading score",
+                              latest?.overall_score == null
+                                ? "—"
+                                : `${latest.overall_score}/100`,
+                              "An estimate for one attempt",
+                            ],
+                            [
+                              "Latest reading pace",
+                              latest?.wpm == null ? "—" : `${latest.wpm} wpm`,
+                              "Speed is only part of fluency",
+                            ],
+                          ].map(([label, value, description]) => (
+                            <div key={label} className={`${panel} p-4 md:p-5`}>
+                              <p className="text-xs text-[var(--stint-text-muted)]">
+                                {label}
+                              </p>
+                              <p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums">
+                                {value}
+                              </p>
+                              <p className="mt-2 text-[11px] text-[var(--stint-text-muted)]">
+                                {description}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div className={`${panel} p-4 md:p-5`}>
+                            <p className="text-xs text-[var(--stint-text-muted)]">
+                              Average score (last {last10Scores.length || 10} readings)
+                            </p>
+                            <p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums">
+                              {avgLast10 == null ? "—" : `${avgLast10}/100`}
+                            </p>
+                            <p className="mt-2 text-[11px] text-[var(--stint-text-muted)]">
+                              Cumulative trend across recent readings, not just one attempt
+                            </p>
+                          </div>
+                          <div className={`${panel} p-4 md:p-5`}>
+                            <p className="text-xs text-[var(--stint-text-muted)]">
+                              Average pace (last {last10Paces.length || 10} readings)
+                            </p>
+                            <p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums">
+                              {avgPaceLast10 == null ? "—" : `${avgPaceLast10} wpm`}
+                            </p>
+                            <p className="mt-2 text-[11px] text-[var(--stint-text-muted)]">
+                              Cumulative pace trend, smoothing out any one-off attempt
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                   <section className={`${panel} p-5`}>
                     <h2 className="font-semibold">
                       Comparable reading progress
